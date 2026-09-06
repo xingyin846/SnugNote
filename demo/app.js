@@ -193,9 +193,9 @@ function noteCard(n) {
         <span class="spacer"></span>
         <button class="mini-btn" data-act="edit" title="编辑">✏️</button>
         ${n.archived
-          ? `<button class="mini-btn" data-act="unarchive" title="恢复">↩️</button>`
+          ? `<button class="mini-btn" data-act="unarchive" title="恢复">↩️</button>
+             <button class="mini-btn danger" data-act="del" title="删除">🗑️</button>`
           : `<button class="mini-btn" data-act="archive" title="归档">📦</button>`}
-        <button class="mini-btn danger" data-act="del" title="删除">🗑️</button>
       </div>
     </article>`;
 }
@@ -265,6 +265,9 @@ board.addEventListener("click", (e) => {
   if (!card) return;
   const note = notes.find((n) => n.id === card.dataset.id);
   if (!note) return;
+
+  // 清单勾选区：点击方框或文字不触发打开编辑，交给 change 事件处理
+  if (e.target.closest('[data-act="check"]') || e.target.closest(".check-item")) return;
 
   if (actBtn) {
     e.stopPropagation();
