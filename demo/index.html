@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="theme-color" content="#f6f4ef" />
+  <title>贴贴便签 · Demo</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="app">
+    <!-- 顶栏 -->
+    <header class="topbar">
+      <div class="brand">
+        <span class="logo">📌</span>
+        <span>贴贴便签</span>
+      </div>
+
+      <div class="search">
+        <span>🔍</span>
+        <input id="searchInput" type="text" placeholder="搜索便签、标签…" autocomplete="off" />
+      </div>
+
+      <div class="topbar-actions">
+        <button class="icon-btn" id="themeBtn" title="切换主题">🌙</button>
+        <button class="primary-btn" id="newBtn">＋ 新建便签</button>
+      </div>
+    </header>
+
+    <div class="layout">
+      <!-- 侧栏（桌面） -->
+      <aside class="sidebar">
+        <div>
+          <div class="side-title">便签</div>
+          <button class="nav-item active" data-nav="all"><span class="ico">🗂️</span>全部便签<span class="count" data-count="all">0</span></button>
+          <button class="nav-item" data-nav="todo"><span class="ico">📝</span>进行中<span class="count" data-count="todo">0</span></button>
+          <button class="nav-item" data-nav="done"><span class="ico">✅</span>已完成<span class="count" data-count="done">0</span></button>
+          <button class="nav-item" data-nav="archived"><span class="ico">📦</span>归档<span class="count" data-count="archived">0</span></button>
+        </div>
+
+        <div>
+          <div class="side-title">标签</div>
+          <div class="tag-row" id="tagList"></div>
+        </div>
+      </aside>
+
+      <!-- 主区 -->
+      <main class="main">
+        <div class="main-top">
+          <h1 id="heading">全部便签</h1>
+          <span class="main-sub" id="countText">0 条</span>
+          <div class="filter-chips" id="filterChips">
+            <button class="filter-chip" data-sort="time">最新</button>
+            <button class="filter-chip" data-sort="due">截止</button>
+            <button class="filter-chip active" data-sort="pin">置顶优先</button>
+          </div>
+        </div>
+
+        <div class="board" id="board">
+          <!-- 便签墙：由 JS 渲染 -->
+        </div>
+      </main>
+    </div>
+
+    <!-- 移动端底部导航 -->
+    <nav class="bottomnav">
+      <button class="bn-item active" data-nav="all"><span class="ico">🗂️</span>全部</button>
+      <button class="bn-item" data-nav="todo"><span class="ico">📝</span>待办</button>
+      <button class="bn-item" id="newBtnMobile"><span class="fab">＋</span></button>
+      <button class="bn-item" data-nav="done"><span class="ico">✅</span>完成</button>
+      <button class="bn-item" data-nav="archived"><span class="ico">📦</span>归档</button>
+    </nav>
+  </div>
+
+  <!-- 编辑弹窗 -->
+  <div class="modal-mask" id="modalMask">
+    <div class="modal">
+      <h2 id="modalTitle">新建便签</h2>
+      <div class="field">
+        <label>标题</label>
+        <input type="text" id="fTitle" placeholder="便签标题" />
+      </div>
+      <div class="field">
+        <label>内容</label>
+        <textarea id="fContent" placeholder="写点什么…"></textarea>
+      </div>
+      <div class="field">
+        <label>颜色</label>
+        <div class="color-picker" id="colorPicker"></div>
+      </div>
+      <div class="field">
+        <label>截止日期</label>
+        <input type="date" id="fDue" />
+      </div>
+      <div class="field">
+        <label>标签（用逗号分隔）</label>
+        <input type="text" id="fTags" placeholder="工作, 生活" />
+      </div>
+      <div class="field">
+        <label>清单子项（每行一项）</label>
+        <textarea id="fChecklist" placeholder="第一件事&#10;第二件事"></textarea>
+      </div>
+      <div class="modal-actions">
+        <button class="btn-ghost" id="cancelBtn">取消</button>
+        <button class="primary-btn" id="saveBtn">保存</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+  <script src="app.js"></script>
+</body>
+</html>
