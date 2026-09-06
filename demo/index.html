@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <meta name="theme-color" content="#f6f4ef" />
-  <title>贴贴便签 · Demo</title>
+  <title>贴贴便签</title>
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
@@ -22,9 +22,12 @@
       </div>
 
       <div class="topbar-actions">
+        <button class="icon-btn" id="exportBtn" title="导出 JSON">⬇️</button>
+        <button class="icon-btn" id="importBtn" title="导入 JSON">⬆️</button>
         <button class="icon-btn" id="themeBtn" title="切换主题">🌙</button>
         <button class="primary-btn" id="newBtn">＋ 新建便签</button>
       </div>
+      <input type="file" id="importFile" accept=".json,application/json" style="display:none" />
     </header>
 
     <div class="layout">
@@ -109,6 +112,7 @@
 
   <div class="toast" id="toast"></div>
 
+  <script src="store.js"></script>
   <script src="app.js"></script>
 </body>
 </html>
