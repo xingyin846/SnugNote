@@ -1,0 +1,7 @@
+# 记忆系统目录（不纳入工作区提交）
+.dsh-meow/
+
+# 系统与编辑器
+.DS_Store
+Thumbs.db
+*.log
