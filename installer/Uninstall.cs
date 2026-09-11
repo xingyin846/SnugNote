@@ -30,11 +30,13 @@ static class UninstallCore
 
         string dataPrefix = "data" + Path.DirectorySeparatorChar;
         string blocked = "";
+        string selfName = Path.GetFileName(Application.ExecutablePath);
 
         // 1) 删程序文件。明确跳过 data\ —— 用户数据归用户
-        for (int i = 0; i < Embedded.Files.Length; i++)
+        //    清单来自构建期生成的 InstalledFiles.Rel（不含 data）
+        for (int i = 0; i < InstalledFiles.Rel.Length; i++)
         {
-            string rel = Embedded.Files[i].Rel.Replace('/', Path.DirectorySeparatorChar);
+            string rel = InstalledFiles.Rel[i].Replace('/', Path.DirectorySeparatorChar);
             if (rel.StartsWith(dataPrefix, StringComparison.OrdinalIgnoreCase)) continue;
             try
             {
@@ -43,7 +45,11 @@ static class UninstallCore
             }
             catch (Exception ex)
             {
-                // 最常见原因：程序还在运行（文件被占用）。如实报告，不假装成功。
+                // 卸载器删不掉"正在运行的自己"，这是必然的：OnFormClosed 里已经
+                // 用 MoveFileEx 安排重启后删除，因此不计为失败。
+                if (string.Equals(rel, selfName, StringComparison.OrdinalIgnoreCase)) continue;
+
+                // 其余情况最常见原因：程序还在运行（文件被占用）。如实报告，不假装成功。
                 blocked += rel + "(" + ex.GetType().Name + ") ";
             }
         }

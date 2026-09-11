@@ -6,15 +6,16 @@
 #                      the demo/ front-end, the uninstaller and an icon.
 #
 #  Pipeline:
-#    1) copy sources to an ASCII stage, draw the icon, compile the uninstaller
-#    2) collect payload bytes + sha256 (launcher, demo/, uninstaller)
-#    3) generate the embedded payload  -> <stage>/payload.g.cs
-#    4) compile the setup exe on the stage, publish to dist/
-#    5) self-check the produced exe (payload probes + embedded uninstaller)
+#    1) stage sources on an ASCII path, draw the icon
+#    2) generate the installed-file manifest + compile the uninstaller
+#    3) collect payload bytes + sha256 (launcher, demo/, uninstaller)
+#    4) generate payload.g.cs
+#    5) compile the setup exe straight into dist/
+#    6) self-check the produced exe
 #
 #  Usage:  powershell -ExecutionPolicy Bypass -File installer\build-installer.ps1
 #
-#  THREE HARD-WON RULES (do not "simplify" these away):
+#  HARD-WON RULES (do not "simplify" these away):
 #
 #   R1. THIS SCRIPT IS PURE ASCII.
 #       Windows PowerShell 5.1 reads .ps1 as system ANSI (GBK) unless a UTF-8
@@ -23,20 +24,26 @@
 #       code points instead. (The C# sources carry Chinese as \uXXXX escapes
 #       for the same class of reason.)
 #
-#   R2. csc.exe ONLY EVER SEES AN ASCII PATH.
+#   R2. csc.exe ONLY EVER SEES AN ASCII PATH - AND ITS OUTPUT GOES TO dist/.
 #       csc is a native tool: given non-ASCII arguments or a non-ASCII current
 #       directory it can report success (exit 0) while the output file is never
-#       written where we asked. Symptom we hit: "setup : ...\<chinese>.exe
-#       (262144 B)" followed by "Could not find file". So: stage everything
-#       under $env:TEMP, run csc with the stage as the working directory, and
-#       copy finished artifacts back to the Chinese workspace path afterwards.
-#       Keeping the stage out of the repository root also stops csc from
-#       picking up unrelated .cs files from the current directory.
+#       written where we asked. So the sources are staged under $env:TEMP and
+#       csc runs with the stage as the working directory.
+#       BUT the final setup must be compiled STRAIGHT INTO dist/: Huorong's
+#       trusted-zone exclusion covers this workspace, not %TEMP%, so a setup
+#       staged in %TEMP% is quarantined before it can be copied out. (That is
+#       why the build failed with "self-check failed: setup disappeared".)
 #
-#   R3. /out: AND /win32icon: GO LAST / ARE QUOTED.
-#       csc wants /out: after the source files (otherwise CS2022), and an icon
-#       path containing spaces must be quoted on one argument (otherwise
-#       CS2021).
+#   R3. /out: AND /win32icon: COME BEFORE THE SOURCE FILES.
+#       csc aborts with CS2022 otherwise, and an unquoted icon path with spaces
+#       gives CS2021.
+#
+#   R4. THE UNINSTALLER'S FILE LIST IS GENERATED, NEVER ASSUMED.
+#       The uninstaller needs the list of installed files, the setup needs the
+#       uninstaller's bytes: a cycle. It is broken with a generated manifest
+#       (installer/FileList.cs) instead of compiling a placeholder uninstaller
+#       whose empty list would later be baked in - a bug that made uninstall
+#       silently delete nothing.
 # ============================================================================
 
 $ErrorActionPreference = 'Stop'
@@ -59,16 +66,39 @@ foreach ($d in @($dist, $stage)) {
   if (-not (Test-Path -LiteralPath $d)) { New-Item -ItemType Directory -Path $d -Force | Out-Null }
 }
 
-# ---- 1/5 stage sources, icon, uninstaller --------------------------------
+# Converts a UTF-16 string into a C# string literal where every non-ASCII
+# character becomes a \uXXXX escape. Keeps generated sources code-page proof.
+function ConvertTo-CsLiteral([string]$s) {
+  $sb = New-Object System.Text.StringBuilder
+  for ($i = 0; $i -lt $s.Length; $i++) {
+    $ch = $s[$i]
+    if ([int][char]$ch -lt 128) { [void]$sb.Append($ch) }
+    else { [void]$sb.Append('\u' + ([int][char]$ch).ToString('X4')) }
+  }
+  return $sb.ToString()
+}
+
+# The files that end up next to the app, in the order they are written.
+# data/ is deliberately absent: the installer must never create or touch it.
+$installed = @(
+  @{ rel = ($appName + '.exe');         src = (Join-Path $root ($appName + '.exe')) },
+  @{ rel = 'demo/index.html';           src = (Join-Path $root 'demo\index.html') },
+  @{ rel = 'demo/styles.css';           src = (Join-Path $root 'demo\styles.css') },
+  @{ rel = 'demo/app.js';               src = (Join-Path $root 'demo\app.js') },
+  @{ rel = 'demo/store.js';             src = (Join-Path $root 'demo\store.js') },
+  @{ rel = 'demo/demo-standalone.html'; src = (Join-Path $root 'demo\demo-standalone.html') },
+  @{ rel = ($uninsStem + '.exe') }      # source assigned once it is compiled
+)
+
+# ---- 1/6 stage sources + icon --------------------------------------------
 Write-Host ''
-Write-Host '=== 1/5 stage sources + icon ===' -ForegroundColor Cyan
+Write-Host '=== 1/6 stage sources + icon ===' -ForegroundColor Cyan
 foreach ($f in 'Common.cs', 'Install.cs', 'Uninstall.cs') {
   Copy-Item -LiteralPath (Join-Path $src $f) -Destination (Join-Path $stage $f) -Force
 }
 
-# The uninstaller is compiled before the real payload exists. It only iterates
-# the payload's file names (it never decodes their bytes), so an empty stub is
-# both sufficient and safe here; the real payload.g.cs replaces it below.
+# The uninstaller is compiled against a stub payload (it never decodes file
+# contents), so the stub only has to satisfy the type references.
 $payloadCs = [string](Join-Path $stage 'payload.g.cs')
 [System.IO.File]::WriteAllText($payloadCs, @'
 // placeholder payload -- replaced by the real base64 payload later in the build
@@ -84,6 +114,7 @@ static class Embedded
     public static readonly Asset[] Files = new Asset[0];
 }
 '@, (New-Object System.Text.UTF8Encoding($false)))
+
 $refs = @('/r:System.dll', '/r:System.Drawing.dll', '/r:System.Windows.Forms.dll')
 
 $icoPath = [string](Join-Path $stage 'app.ico')
@@ -137,13 +168,12 @@ $bw.Write([uint16]1); $bw.Write([uint16]32)
 $bw.Write([uint32]$png.Length); $bw.Write([uint32]22)
 $bw.Write($png)
 $bw.Flush(); $bw.Close(); $fs.Close()
-Write-Host ("  icon  : {0} ({1} B, {2} B PNG inside)" -f 'app.ico', (Get-Item -LiteralPath $icoPath).Length, $png.Length)
+Write-Host ("  icon  : app.ico ({0} B, {1} B PNG inside)" -f (Get-Item -LiteralPath $icoPath).Length, $png.Length)
 
-function Invoke-Csc([string]$outName, [string]$define, [string[]]$sources) {
-  $out = [string](Join-Path $stage $outName)
+function Invoke-Csc([string]$outPath, [string]$define, [string[]]$sources) {
+  $out = $outPath
   if (Test-Path -LiteralPath $out) { Remove-Item -LiteralPath $out -Force }
-  # NOTE: every option (including /out:) must precede the source files, or csc
-  # aborts with CS2022.
+  # every option (including /out:) must precede the source files (else CS2022)
   $argv = @('/nologo', '/target:winexe', '/optimize+', '/codepage:65001',
             ('/define:' + $define), ('/win32icon:' + $icoPath),
             ('/out:' + $out)) + $refs
@@ -152,34 +182,46 @@ function Invoke-Csc([string]$outName, [string]$define, [string[]]$sources) {
   try { $log = & $csc @argv 2>&1 } finally { Pop-Location }
   if ($LASTEXITCODE -ne 0) {
     Write-Host ($log | Out-String)
-    Write-Error ("csc failed for " + $outName + " (exit " + $LASTEXITCODE + ")")
+    Write-Error ("csc failed for " + $out + " (exit " + $LASTEXITCODE + ")")
     exit 1
   }
   if (-not (Test-Path -LiteralPath $out)) { Write-Error ("csc reported success but " + $out + " does not exist"); exit 1 }
   return $out
 }
 
-# The uninstaller is compiled first: it ships INSIDE the setup payload.
-$stageUnins = Invoke-Csc 'uninstall_stage.exe' 'UNINSTALL_BUILD' @('Common.cs', 'Uninstall.cs', 'payload.g.cs')
-$unExe = [string](Join-Path $stage ($uninsStem + '.exe'))
-Copy-Item -LiteralPath $stageUnins -Destination $unExe -Force
-Write-Host ("  unins : {0} ({1} B)" -f ($uninsStem + '.exe'), (Get-Item -LiteralPath $unExe).Length)
-
-# ---- 2/5 collect payload --------------------------------------------------
-$entries = @(
-  @{ src = (Join-Path $root ($appName + '.exe'));         rel = ($appName + '.exe') },
-  @{ src = (Join-Path $root 'demo\index.html');           rel = 'demo/index.html' },
-  @{ src = (Join-Path $root 'demo\styles.css');           rel = 'demo/styles.css' },
-  @{ src = (Join-Path $root 'demo\app.js');               rel = 'demo/app.js' },
-  @{ src = (Join-Path $root 'demo\store.js');             rel = 'demo/store.js' },
-  @{ src = (Join-Path $root 'demo\demo-standalone.html'); rel = 'demo/demo-standalone.html' },
-  @{ src = $unExe;                                        rel = ($uninsStem + '.exe') }
-)
-
+# ---- 2/6 manifest + uninstaller ------------------------------------------
 Write-Host ''
-Write-Host '=== 2/5 collect payload files ===' -ForegroundColor Cyan
+Write-Host '=== 2/6 generate file manifest + compile uninstaller ===' -ForegroundColor Cyan
+$fl = New-Object System.Text.StringBuilder
+[void]$fl.AppendLine('// AUTO-GENERATED by installer/build-installer.ps1 -- do not edit by hand.')
+[void]$fl.AppendLine('// The files an installation consists of; the uninstaller deletes exactly these.')
+[void]$fl.AppendLine('// data/ is deliberately absent: user notes are never touched.')
+[void]$fl.AppendLine('')
+[void]$fl.AppendLine('static class InstalledFiles')
+[void]$fl.AppendLine('{')
+[void]$fl.AppendLine('    public static readonly string[] Rel = new string[]')
+[void]$fl.AppendLine('    {')
+foreach ($e in $installed) { [void]$fl.AppendLine('        "' + (ConvertTo-CsLiteral $e.rel) + '",') }
+[void]$fl.AppendLine('    };')
+[void]$fl.AppendLine('}')
+$fileListCs = [string](Join-Path $stage 'FileList.cs')
+[System.IO.File]::WriteAllText($fileListCs, $fl.ToString(), (New-Object System.Text.UTF8Encoding($false)))
+Write-Host ("  manifest ({0} entries)" -f $installed.Count)
+foreach ($e in $installed) { Write-Host ("      " + $e.rel) }
+
+$unExe = [string](Join-Path $stage ($uninsStem + '.exe'))
+$unExe = Invoke-Csc $unExe 'UNINSTALL_BUILD' @('Common.cs', 'Uninstall.cs', 'FileList.cs', 'payload.g.cs')
+$installed[$installed.Count - 1].src = $unExe
+Write-Host ("  unins : {0} ({1} B)" -f ($uninsStem + '.exe'), (Get-Item -LiteralPath $unExe).Length) -ForegroundColor Green
+
+# The setup payload must embed the uninstaller AND expose the same manifest, so
+# it is compiled with both payload.g.cs and the generated FileList.cs below.
+
+# ---- 3/6 collect payload -------------------------------------------------
+Write-Host ''
+Write-Host '=== 3/6 collect payload files ===' -ForegroundColor Cyan
 $items = New-Object System.Collections.ArrayList
-foreach ($e in $entries) {
+foreach ($e in $installed) {
   if (-not (Test-Path -LiteralPath $e.src)) { Write-Error ("missing file: " + $e.src); exit 1 }
   $bytes = [System.IO.File]::ReadAllBytes($e.src)
   $sha   = [System.Security.Cryptography.SHA256]::Create()
@@ -192,9 +234,9 @@ foreach ($e in $entries) {
 $payloadBytes = ($items | Measure-Object -Property Len -Sum).Sum
 Write-Host ("  {0} files, {1} B total" -f $items.Count, $payloadBytes)
 
-# ---- 3/5 payload.g.cs ----------------------------------------------------
+# ---- 4/6 payload.g.cs ----------------------------------------------------
 Write-Host ''
-Write-Host '=== 3/5 generate payload.g.cs ===' -ForegroundColor Cyan
+Write-Host '=== 4/6 generate payload.g.cs ===' -ForegroundColor Cyan
 $sb = New-Object System.Text.StringBuilder
 [void]$sb.AppendLine('// AUTO-GENERATED by installer/build-installer.ps1 -- do not edit by hand.')
 [void]$sb.AppendLine('// base64 copies of every file the installer lays down.')
@@ -212,40 +254,32 @@ $sb = New-Object System.Text.StringBuilder
 [void]$sb.AppendLine('    public static readonly Asset[] Files = new Asset[]')
 [void]$sb.AppendLine('    {')
 foreach ($it in $items) {
-  $esc = -join ($it.Rel.ToCharArray() | ForEach-Object {
-    if ([int][char]$_ -lt 128) { $_ } else { '\u' + ([int][char]$_).ToString('X4') }
-  })
-  [void]$sb.AppendLine("        new Asset(`"$esc`", `"$([System.Convert]::ToBase64String($it.Bytes))`"),")
+  [void]$sb.AppendLine('        new Asset("' + (ConvertTo-CsLiteral $it.Rel) + '", "' + [System.Convert]::ToBase64String($it.Bytes) + '"),')
 }
 [void]$sb.AppendLine('    };')
 [void]$sb.AppendLine('}')
 [System.IO.File]::WriteAllText($payloadCs, $sb.ToString(), (New-Object System.Text.UTF8Encoding($false)))
-Write-Host ("  {0} ({1} B)" -f 'payload.g.cs', (Get-Item -LiteralPath $payloadCs).Length)
+Write-Host ("  payload.g.cs ({0} B)" -f (Get-Item -LiteralPath $payloadCs).Length)
 
-# ---- 4/5 compile + publish ----------------------------------------------
+# ---- 5/6 compile setup into dist/ ---------------------------------------
 Write-Host ''
-Write-Host '=== 4/5 compile setup + publish ===' -ForegroundColor Cyan
-$stageSetup = Invoke-Csc 'setup_stage.exe' 'INSTALLER_BUILD' @('Common.cs', 'Install.cs', 'payload.g.cs')
-Write-Host ("  staged : {0} ({1} B)" -f 'setup_stage.exe', (Get-Item -LiteralPath $stageSetup).Length) -ForegroundColor Green
-
+Write-Host '=== 5/6 compile setup into dist/ ===' -ForegroundColor Cyan
 $setupExe = [string](Join-Path $dist ($setupStem + '.exe'))
-if (Test-Path -LiteralPath $setupExe) { Remove-Item -LiteralPath $setupExe -Force }
-Copy-Item -LiteralPath $stageSetup -Destination $setupExe -Force
-Start-Sleep -Milliseconds 300
+$setupExe = Invoke-Csc $setupExe 'INSTALLER_BUILD' @('Common.cs', 'Install.cs', 'FileList.cs', 'payload.g.cs')
 Write-Host ("  publish: {0} ({1} B)" -f ($setupStem + '.exe'), (Get-Item -LiteralPath $setupExe).Length) -ForegroundColor Green
 
-# ---- 5/5 self-check ------------------------------------------------------
+# ---- 6/6 self-check -----------------------------------------------------
 Write-Host ''
-Write-Host '=== 5/5 self-check ===' -ForegroundColor Cyan
+Write-Host '=== 6/6 self-check ===' -ForegroundColor Cyan
 Start-Sleep -Seconds 3
 if (-not (Test-Path -LiteralPath $setupExe)) {
-  Write-Error 'self-check failed: setup disappeared right after publishing (antivirus?)'
+  Write-Error 'self-check failed: setup disappeared right after publishing (antivirus trusted zone?)'
   exit 1
 }
 
 $setupBytes = [System.IO.File]::ReadAllBytes($setupExe)
-$unBytes    = [System.IO.File]::ReadAllBytes($unExe)
 
+# a) the uninstaller's name must be present (UTF-16: that is how .NET stores it)
 $needle = [System.Text.Encoding]::Unicode.GetBytes($uninsStem + '.exe')
 $hit = $false
 for ($i = 0; $i -le $setupBytes.Length - $needle.Length -and -not $hit; $i++) {
@@ -256,13 +290,34 @@ for ($i = 0; $i -le $setupBytes.Length - $needle.Length -and -not $hit; $i++) {
 if (-not $hit) { Write-Error 'self-check failed: uninstaller name not found in setup'; exit 1 }
 Write-Host '  uninstaller name in setup : yes (UTF-16 scan)'
 
+# b) every payload entry must be embedded as its base64 prefix
 $payloadText = $sb.ToString()
 foreach ($it in $items) {
   $b64 = [System.Convert]::ToBase64String($it.Bytes)
   $probe = $b64.Substring(0, [Math]::Min(160, $b64.Length))
   if (-not $payloadText.Contains($probe)) { Write-Error ("self-check failed: payload probe missing for " + $it.Rel); exit 1 }
 }
-Write-Host ("  payload entries encoded   : {0} / {1}" -f $items.Count, $items.Count)
+Write-Host ("  payload entries encoded   : {0}" -f $items.Count)
+
+# c) the uninstaller must carry EXACTLY the set of files a real installation
+#    consists of. Compares the manifest text baked into the compiled
+#    uninstaller against the source tree, so it is not circular: it catches a
+#    placeholder/empty list being compiled in (a bug that once shipped).
+$unBytes = [System.IO.File]::ReadAllBytes($unExe)
+$missing = 0
+foreach ($e in $installed) {
+  $n = [System.Text.Encoding]::Unicode.GetBytes($e.rel)   # rels are ASCII ('/'), so UTF-16 is exact
+  $found = $false
+  for ($i = 0; $i -le $unBytes.Length - $n.Length -and -not $found; $i++) {
+    $ok = $true
+    for ($j = 0; $j -lt $n.Length; $j++) { if ($unBytes[$i + $j] -ne $n[$j]) { $ok = $false; break } }
+    if ($ok) { $found = $true }
+  }
+  if (-not $found) { Write-Host ("  MISSING in uninstaller manifest: " + $e.rel) -ForegroundColor Red; $missing++ }
+}
+if ($missing -gt 0) { Write-Error ("self-check failed: uninstaller manifest is missing " + $missing + " entries"); exit 1 }
+Write-Host ("  uninstaller manifest      : all {0} entries present in its bytes" -f $installed.Count)
+Write-Host ("                              (and each source file exists: {0} checked)" -f $installed.Count)
 
 Write-Host ''
 Write-Host '=== BUILD OK ===' -ForegroundColor Green
