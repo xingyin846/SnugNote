@@ -11,3 +11,6 @@ data/
 .DS_Store
 Thumbs.db
 *.log
+
+# AgentTeams 团队运行态（不纳入仓库）
+.agent-teams/
