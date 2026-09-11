@@ -1,16 +1,14 @@
-# 记忆系统目录（不纳入工作区提交）
-.dsh-meow/
-
-# 便签数据文件（由「任务便签.exe」管理，属用户私人数据，绝不入库）
-data/
-
-# 本地工具（穿透等临时二进制，不纳入仓库）
+# 开发/运行产物，不进版本库
 .tools/
+data/
+dist/
+dist_work/
 
-# 系统与编辑器
+# 记忆系统与协作运行态
+.dsh-meow/
+.agent-teams/
+
+# 杂项
+*.log
 .DS_Store
 Thumbs.db
-*.log
-
-# AgentTeams 团队运行态（不纳入仓库）
-.agent-teams/
