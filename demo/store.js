@@ -1,7 +1,7 @@
 /* ===== 存储抽象层 =====
  * 设计：UI 与业务只依赖 adapter 接口（getAll / save / saveMany / remove），不关心底层。
  * 本文件提供两个实现，运行期自动探测选一个：
- *   · HttpFileAdapter —— 由「任务便签.exe」提供 /api/notes 接口，数据落盘为 exe 同级的 data/notes.json
+ *   · HttpFileAdapter —— 由「贴贴便签.exe」提供 /api/notes 接口，数据落盘为 exe 同级的 data/notes.json
  *                        （数据归程序管：关掉浏览器不丢、清浏览器数据也不丢，文件可直接备份/带走）
  *   · IndexedDBAdapter —— 直接双击 index.html 或其它静态服务下的回退方案（存在浏览器里，按 origin 隔离）
  * 将来阶段 2/3 换 SqliteAdapter（原生 SQLite）时，同样只需再加一个实现、字段保持一致。

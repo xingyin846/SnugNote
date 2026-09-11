@@ -28,11 +28,19 @@ using Microsoft.Win32;
 
 static class AppInfo
 {
-    public const string Name = "\u4EFB\u52A1\u4FBF\u7B7E";              // 任务便签
+    // 产品名（2026-09-11 由「任务便签」改为「贴贴便签」，界面/启动器本来就用这个名字）
+    public const string Name = "\u8D34\u8D34\u4FBF\u7B7E";              // 贴贴便签
     public const string Version = "1.0.0";
-    public const string Publisher = "\u4EFB\u52A1\u4FBF\u7B7E";         // 任务便签
+    public const string Publisher = "\u8D34\u8D34\u4FBF\u7B7E";         // 贴贴便签
+
+    // 旧名（改名前叫「任务便签」）。只用于升级时识别并清理旧版残留，
+    // 绝不用于新安装的路径/文件名。
+    public const string LegacyName = "\u4EFB\u52A1\u4FBF\u7B7E";        // 任务便签
+
     public const string SubKeyName =
         "Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\TietieNotes";
+    public const string LegacySubKeyName =
+        "Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\TietieNotes";   // 键名未随产品名变，保留兼容
 
     // 同一份代码编译出两个 exe，靠自身文件名区分模式
     public const string UninstallFile = "\u5378\u8F7D.exe";             // 卸载.exe
@@ -283,6 +291,11 @@ static class InstallCore
         string exe = Path.Combine(dir, AppInfo.Name + ".exe");
         if (File.Exists(exe) && Util.IsLocked(exe))
             return AppInfo.Name + " \u6B63\u5728\u8FD0\u884C\uFF0C\u8BF7\u5148\u5173\u95ED\u5B83\u7684\u9ED1\u8272\u7A97\u53E3";   // 正在运行
+
+        // 改名前装的旧版如果还在跑，装完会变成"两个图标、两个进程"，先让用户关掉
+        if (Legacy.Running(Legacy.LegacyDir()))
+            return "\u68C0\u6D4B\u5230\u65E7\u7248\uFF08" + AppInfo.LegacyName + "\uFF09\u8FD8\u5728\u8FD0\u884C\uFF0C"
+                 + "\u8BF7\u5148\u5173\u95ED\u5B83\u7684\u9ED1\u8272\u7A97\u53E3\u518D\u5B89\u88C5";
         return null;
     }
 
@@ -356,6 +369,7 @@ static class InstallCore
             }
 
             WriteRegistry(dir);
+            Legacy.Cleanup();
             if (problems.Length > 0) Console.WriteLine("\u8B66\u544A\uFF1A" + problems);
             return true;
         }
@@ -364,6 +378,97 @@ static class InstallCore
             err = ex.GetType().Name + ": " + ex.Message;
             return false;
         }
+    }
+}
+
+// ---------------------------------------------------------------------------
+//  旧版残留清理：产品名从「任务便签」改为「贴贴便签」后，旧版留下的
+//  exe / 快捷方式 / 开始菜单项 / 注册表项都不再被新版本使用。
+//  这里只清"程序"层面的残留，user 数据目录（旧 data\notes.json）一律保留。
+// ---------------------------------------------------------------------------
+static class Legacy
+{
+    public static string ExePath
+    {
+        get { return Path.Combine(AppInfo.LegacyName + ".exe"); }
+    }
+
+    public static string LegacyDir()
+    {
+        return Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+            AppInfo.LegacyName);
+    }
+
+    public static bool Detected()
+    {
+        try
+        {
+            if (Directory.Exists(LegacyDir())) return true;
+            if (File.Exists(Path.Combine(LegacyDir(), AppInfo.LegacyName + ".exe"))) return true;
+        }
+        catch { }
+        try
+        {
+            string link = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory),
+                AppInfo.LegacyName + ".lnk");
+            if (File.Exists(link)) return true;
+        }
+        catch { }
+        return false;
+    }
+
+    // 旧版是否还在运行（运行中就不该删它的文件，也不该让用户以为换名成功了）
+    public static bool Running(string legacyInstallDir)
+    {
+        try
+        {
+            string exe = Path.Combine(legacyInstallDir, AppInfo.LegacyName + ".exe");
+            if (File.Exists(exe) && Util.IsLocked(exe)) return true;
+        }
+        catch { }
+        return false;
+    }
+
+    public static void Cleanup()
+    {
+        // 1) 旧快捷方式（桌面 + 开始菜单）
+        TryDeleteFile(Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory),
+            AppInfo.LegacyName + ".lnk"));
+
+        string oldMenu = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Programs),
+            AppInfo.LegacyName);
+        TryDeleteFile(Path.Combine(oldMenu, AppInfo.LegacyName + ".lnk"));
+        TryDeleteEmptyDir(oldMenu);
+
+        // 2) 旧安装目录里的"程序"文件（只删我们自己装过的那几个名字，data\ 不动）
+        string dir = LegacyDir();
+        TryDeleteFile(Path.Combine(dir, AppInfo.LegacyName + ".exe"));
+        TryDeleteFile(Path.Combine(dir, AppInfo.UninstallFile));
+        TryDeleteFile(Path.Combine(dir, "demo", "index.html"));
+        TryDeleteFile(Path.Combine(dir, "demo", "styles.css"));
+        TryDeleteFile(Path.Combine(dir, "demo", "app.js"));
+        TryDeleteFile(Path.Combine(dir, "demo", "store.js"));
+        TryDeleteFile(Path.Combine(dir, "demo", "demo-standalone.html"));
+        TryDeleteEmptyDir(Path.Combine(dir, "demo"));
+        TryDeleteEmptyDir(dir);   // 只有空目录才会被删（有 data\ 就自然保留）
+    }
+
+    static void TryDeleteFile(string f)
+    {
+        try { if (File.Exists(f)) File.Delete(f); }
+        catch { }
+    }
+
+    static void TryDeleteEmptyDir(string d)
+    {
+        try
+        {
+            if (Directory.Exists(d) && Directory.GetFileSystemEntries(d).Length == 0) Directory.Delete(d);
+        }
+        catch { }
     }
 }
 

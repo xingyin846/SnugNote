@@ -4,7 +4,7 @@
 //       ② 数据接口 /api/notes（GET 读 / PUT 写）→ 数据落盘到 data\notes.json
 //       启动后自动打开默认浏览器。关闭本窗口即停止服务。
 // 特点：不依赖 Python / Node，不联网，不需要管理员权限。
-// 用法：任务便签.exe [端口]     （不传则从 8787 起找空闲端口）
+// 用法：贴贴便签.exe [端口]     （不传则从 8787 起找空闲端口）
 
 using System;
 using System.Collections.Generic;

@@ -59,15 +59,27 @@ static class UninstallCore
             return false;
         }
 
-        // 2) 快捷方式
+        // 1b) 改名前（任务便签）留下的同名程序文件，一并清掉；数据仍不动
+        string legacyExe = Path.Combine(dir, AppInfo.LegacyName + ".exe");
+        try { if (File.Exists(legacyExe)) { File.Delete(legacyExe); cleaned++; } }
+        catch { }
+
+        // 2) 快捷方式（新旧名都清）
         TryDeleteFile(Util.DesktopLink());
         TryDeleteFile(Util.StartMenuLink());
+        TryDeleteFile(Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory),
+            AppInfo.LegacyName + ".lnk"));
         try
         {
             string sm = Util.StartMenuDir();
             if (Directory.Exists(sm) && Directory.GetFileSystemEntries(sm).Length == 0) Directory.Delete(sm);
         }
         catch { }
+        string oldMenu = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Programs),
+            AppInfo.LegacyName);
+        TryDeleteFile(Path.Combine(oldMenu, AppInfo.LegacyName + ".lnk"));
+        TryDeleteEmptyDir(oldMenu);
 
         // 3) 注册表（「应用和功能」里的条目）
         try { Registry.CurrentUser.DeleteSubKeyTree(AppInfo.SubKeyName, false); }

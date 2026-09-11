@@ -57,10 +57,13 @@ $csc = 'C:\Windows\Microsoft.NET\Framework64\v4.0.30319\csc.exe'
 if (-not (Test-Path -LiteralPath $csc)) { $csc = 'C:\Windows\Microsoft.NET\Framework\v4.0.30319\csc.exe' }
 if (-not (Test-Path -LiteralPath $csc)) { Write-Error 'csc.exe not found (.NET Framework 4.x required)'; exit 1 }
 
-# app name = U+4EFB U+52A1 U+4FBF U+7B7E ; setup = "<app>-" U+5B89 U+88C5 U+5305 ; uninstaller = U+5378 U+8F7D
-$appName   = [string]([char]0x4EFB + [char]0x52A1 + [char]0x4FBF + [char]0x7B7E)
+# app name = U+8D34 U+8D34 U+4FBF U+7B7E (renamed 2026-09-11, was U+4EFB U+52A1 ...)
+# legacy name = U+4EFB U+52A1 U+4FBF U+7B7E -- only used to spot stale artifacts
+# setup = "<app>-" U+5B89 U+88C5 U+5305 ; uninstaller = U+5378 U+8F7D
+$appName   = [string]([char]0x8D34 + [char]0x8D34 + [char]0x4FBF + [char]0x7B7E)
 $setupStem = [string]($appName + '-' + [char]0x5B89 + [char]0x88C5 + [char]0x5305)
 $uninsStem = [string]([char]0x5378 + [char]0x8F7D)
+$legacyStem = [string]([char]0x4EFB + [char]0x52A1 + [char]0x4FBF + [char]0x7B7E)
 
 foreach ($d in @($dist, $stage)) {
   if (-not (Test-Path -LiteralPath $d)) { New-Item -ItemType Directory -Path $d -Force | Out-Null }
@@ -90,6 +93,15 @@ $installed = @(
   @{ rel = ($uninsStem + '.exe') }      # source assigned once it is compiled
 )
 
+# Guard: the old launcher name must not be shipped any more, and if it is still
+# around it means launcher\build.ps1 has not been rerun (the launcher exe has no
+# build step of its own in this script).
+$legacyExe = [string](Join-Path $root ($legacyStem + '.exe'))
+if (Test-Path -LiteralPath $legacyExe) {
+  Write-Error ("old launcher still present: " + $legacyExe + " -- rerun launcher\build.ps1 first")
+  exit 1
+}
+
 # ---- 1/6 stage sources + icon --------------------------------------------
 Write-Host ''
 Write-Host '=== 1/6 stage sources + icon ===' -ForegroundColor Cyan
@@ -118,57 +130,17 @@ static class Embedded
 $refs = @('/r:System.dll', '/r:System.Drawing.dll', '/r:System.Windows.Forms.dll')
 
 $icoPath = [string](Join-Path $stage 'app.ico')
-Add-Type -AssemblyName System.Drawing
-$bmp = New-Object System.Drawing.Bitmap 256, 256
-$g   = [System.Drawing.Graphics]::FromImage($bmp)
-$g.SmoothingMode     = [System.Drawing.Drawing2D.SmoothingMode]::AntiAlias
-$g.TextRenderingHint = [System.Drawing.Text.TextRenderingHint]::AntiAliasGridFit
-$g.Clear([System.Drawing.Color]::Transparent)
-
-function New-RoundPath([int]$x, [int]$y, [int]$w, [int]$h, [int]$r) {
-  $p = New-Object System.Drawing.Drawing2D.GraphicsPath
-  $d = $r * 2
-  $p.AddArc($x, $y, $d, $d, 180, 90)
-  $p.AddArc($x + $w - $d, $y, $d, $d, 270, 90)
-  $p.AddArc($x + $w - $d, $y + $h - $d, $d, $d, 0, 90)
-  $p.AddArc($x, $y + $h - $d, $d, $d, 90, 90)
-  $p.CloseFigure()
-  return $p
+# The brand mark is authored once by installer/make-icon.ps1 (iterated against
+# the reference screenshot); this build only consumes it, so redesigning the
+# icon never means touching the build script.
+$icoSrc = [string](Join-Path $root '.tools\_icon\app.ico')
+if (-not (Test-Path -LiteralPath $icoSrc)) {
+  Write-Host '  icon missing -- running installer\make-icon.ps1 first' -ForegroundColor Yellow
+  & powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $src 'make-icon.ps1') | Out-Null
 }
-
-$paper = New-RoundPath 16 16 224 224 40
-$g.FillPath((New-Object System.Drawing.SolidBrush ([System.Drawing.Color]::FromArgb(255, 255, 244, 200))), $paper)
-$g.FillPolygon((New-Object System.Drawing.SolidBrush ([System.Drawing.Color]::FromArgb(255, 243, 219, 126))), @(
-  (New-Object System.Drawing.Point 168, 240),
-  (New-Object System.Drawing.Point 240, 240),
-  (New-Object System.Drawing.Point 240, 168)
-))
-$g.DrawPath((New-Object System.Drawing.Pen ([System.Drawing.Color]::FromArgb(255, 214, 178, 64)), 10), $paper)
-
-$font = New-Object System.Drawing.Font 'Microsoft YaHei', 118, ([System.Drawing.FontStyle]::Bold), ([System.Drawing.GraphicsUnit]::Pixel)
-$fmt  = New-Object System.Drawing.StringFormat
-$fmt.Alignment     = [System.Drawing.StringAlignment]::Center
-$fmt.LineAlignment = [System.Drawing.StringAlignment]::Center
-$rect = New-Object System.Drawing.RectangleF 16, 24, 224, 210
-$g.DrawString([string][char]0x7B7E, $font,
-  (New-Object System.Drawing.SolidBrush ([System.Drawing.Color]::FromArgb(255, 88, 66, 18))), $rect, $fmt)
-$g.Dispose()
-
-$ms = New-Object System.IO.MemoryStream
-$bmp.Save($ms, [System.Drawing.Imaging.ImageFormat]::Png)
-$png = $ms.ToArray()
-$ms.Dispose(); $bmp.Dispose()
-
-$fs = [System.IO.File]::Create($icoPath)
-$bw = New-Object System.IO.BinaryWriter $fs
-$bw.Write([uint16]0); $bw.Write([uint16]1); $bw.Write([uint16]1)
-$bw.Write([byte]0);   $bw.Write([byte]0)
-$bw.Write([byte]0);   $bw.Write([byte]0)
-$bw.Write([uint16]1); $bw.Write([uint16]32)
-$bw.Write([uint32]$png.Length); $bw.Write([uint32]22)
-$bw.Write($png)
-$bw.Flush(); $bw.Close(); $fs.Close()
-Write-Host ("  icon  : app.ico ({0} B, {1} B PNG inside)" -f (Get-Item -LiteralPath $icoPath).Length, $png.Length)
+if (-not (Test-Path -LiteralPath $icoSrc)) { Write-Error ("icon not found: " + $icoSrc); exit 1 }
+Copy-Item -LiteralPath $icoSrc -Destination $icoPath -Force
+Write-Host ("  icon  : app.ico ({0} B, from installer/make-icon.ps1)" -f (Get-Item -LiteralPath $icoPath).Length)
 
 function Invoke-Csc([string]$outPath, [string]$define, [string[]]$sources) {
   $out = $outPath

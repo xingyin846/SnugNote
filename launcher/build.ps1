@@ -1,4 +1,4 @@
-# 重新编译「贴贴便签」一键启动器为 exe
+﻿# 重新编译「贴贴便签」一键启动器为 exe
 # 用法：在本目录下执行  powershell -ExecutionPolicy Bypass -File build.ps1
 #       （PowerShell 5.1 与 PowerShell 7 均可）
 # 说明：使用 Windows 自带的 .NET Framework 编译器，无需联网、无需管理员权限。
@@ -16,12 +16,15 @@ if (-not (Test-Path $csc)) {
   exit 1
 }
 
-# "任务便签.exe"：任务=4EFB 务=52A1 便=4FBF 签=7B7E
-$exeName = ([char]0x4EFB + [char]0x52A1 + [char]0x4FBF + [char]0x7B7E + ".exe")
+# "贴贴便签.exe"：贴=8D34 便=4FBF 签=7B7E
+$exeName = ([char]0x8D34 + [char]0x8D34 + [char]0x4FBF + [char]0x7B7E + ".exe")
 $out = Join-Path (Split-Path -Parent $PSScriptRoot) $exeName
 $src = Join-Path $PSScriptRoot "Program.cs"
+$ico = Join-Path $PSScriptRoot "app.ico"
+$iconArg = @()
+if (Test-Path -LiteralPath $ico) { $iconArg = @("/win32icon:$ico") }
 
-& $csc /nologo /target:exe /codepage:65001 /r:System.dll /out:"$out" "$src"
+& $csc /nologo /target:exe /codepage:65001 /r:System.dll @iconArg /out:"$out" "$src"
 
 if ($LASTEXITCODE -eq 0) {
   Write-Host "编译成功：" -NoNewline

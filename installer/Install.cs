@@ -79,6 +79,18 @@ class WelcomeForm : Form
                        + "\u5171 " + Util.Human(Payload.TotalBytes()) + "\u3002";   // 将安装 N 个文件，共 X
         Controls.Add(lblStatus);
 
+        // 改名升级：提示会顺手清掉旧版留下的快捷方式与目录（用户数据保留）
+        if (Legacy.Detected())
+        {
+            Label legacy = new Label();
+            legacy.Text = "\u68C0\u6D4B\u5230\u65E7\u7248\uFF08" + AppInfo.LegacyName + "\uFF09"
+                        + "\uFF0C\u5B89\u88C5\u540E\u4F1A\u81EA\u52A8\u6E05\u7406\u5176\u5FEB\u6377\u65B9\u5F0F"
+                        + "\u4E0E\u7A0B\u5E8F\u76EE\u5F55\uFF0C\u4FBF\u7B7E\u6570\u636E\u4E0D\u53D7\u5F71\u54CD\u3002";
+            legacy.ForeColor = Color.FromArgb(176, 108, 24);
+            legacy.SetBounds(30, 164, 476, 18);
+            Controls.Add(legacy);
+        }
+
         Panel bar = new Panel();
         bar.SetBounds(0, 230, 524, 56);
         bar.BackColor = Color.FromArgb(246, 246, 248);
@@ -230,6 +242,7 @@ class ProgressForm : Form
 
             string created = InstallCore.CreateShortcuts(dir, true);
             InstallCore.WriteRegistry(dir);
+            Legacy.Cleanup();
 
             if (created.Length == 0)
                 throw new Exception("\u5FEB\u6377\u65B9\u5F0F\u521B\u5EFA\u5931\u8D25\uFF08\u684C\u9762\u4E0E\u5F00\u59CB\u83DC\u5355\u90FD\u6CA1\u6210\u529F\uFF09");
