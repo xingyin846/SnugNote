@@ -1,4 +1,4 @@
-/* ===== 贴贴便签 · 电脑版（IndexedDB 持久化 + JSON 导出/导入） ===== */
+/* ===== 贴贴便签 · 电脑版（本地文件持久化 / IndexedDB 回退 + JSON 导出/导入） ===== */
 
 const COLORS = [
   { key: "yellow", hex: "#fff6c9" },
@@ -36,7 +36,8 @@ const SEED_FLAG = "tietie-seeded";
 let state = { nav: "all", sort: "pin", query: "", tag: null };
 let editingId = null; // null = 新建
 let notes = [];       // 从 store 加载
-let store = new IndexedDBAdapter();
+let store = null;     // 启动时由 openStore() 探测：exe 文件模式 / IndexedDB 回退
+let storeMode = "";   // "file" = 数据落盘为 data/notes.json；"indexeddb" = 浏览器存储
 
 const $ = (s) => document.querySelector(s);
 const board = $("#board");
@@ -260,10 +261,8 @@ function importJSON(file) {
     try {
       const arr = JSON.parse(reader.result);
       if (!Array.isArray(arr)) throw new Error("文件格式不正确（应为数组）");
-      for (const n of arr) {
-        if (!n || typeof n !== "object") continue;
-        await store.save(normalize(n));
-      }
+      const valid = arr.filter((n) => n && typeof n === "object").map((n) => normalize(n));
+      await store.saveMany(valid);
       notes = await store.getAll();
       localStorage.setItem(SEED_FLAG, "1");
       render();
@@ -356,17 +355,27 @@ function toast(msg) {
 /* ---------- 启动 ---------- */
 async function boot() {
   initTheme();
-  await store.init();
+  const opened = await openStore();   // exe 环境 → 文件；否则回退 IndexedDB
+  store = opened.store;
+  storeMode = opened.mode;
+
+  if (storeMode === "file") {
+    const moved = await migrateLegacyToFile(store);   // 首启把浏览器里的旧便签搬进数据文件
+    if (moved > 0) toast(`已把浏览器里的 ${moved} 条便签搬进数据文件`);
+  }
+
   notes = await store.getAll();
   if (!localStorage.getItem(SEED_FLAG) && notes.length === 0) {
-    for (const s of SEED) {
-      const n = normalize(s);
-      notes.push(n);
-      await store.save(n);
-    }
+    const seeds = SEED.map((s) => normalize(s));
+    await store.saveMany(seeds);
+    notes = seeds;
     localStorage.setItem(SEED_FLAG, "1");
   }
   render();
 }
 boot();
-console.log("%c贴贴便签 电脑版已加载（IndexedDB 持久化）", "color:#ff7a9e;font-weight:bold");
+console.log(
+  "%c贴贴便签 电脑版已加载",
+  "color:#ff7a9e;font-weight:bold",
+  storeMode === "file" ? "数据模式：本地文件 data/notes.json（由启动器管理）" : "数据模式：浏览器 IndexedDB"
+);
