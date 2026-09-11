@@ -266,6 +266,18 @@ button {
   border-radius: 50%;
 }
 .tag-chip:hover { background: var(--chip-bg); color: var(--text); }
+/* 多选态：颜色由 JS 按标签名注入（同色相：未选中=浅底，选中=实心加深） */
+.tag-chip.active { font-weight: 700; box-shadow: 0 1px 6px rgba(0, 0, 0, .18); }
+.tag-chip.active .dot { box-shadow: 0 0 0 2px rgba(255, 255, 255, .35); }
+/* 选中态悬停时略降亮度，给"再点一次取消"的反馈 */
+.tag-chip.active:hover { filter: brightness(.92); }
+/* 清除按钮：中性描边，不抢标签的颜色 */
+.tag-clear {
+  background: transparent;
+  border-style: dashed;
+  color: var(--text-soft);
+}
+.tag-clear:hover { background: var(--chip-bg); color: var(--text); }
 
 /* ---------- 主区（便签墙） ---------- */
 .main {

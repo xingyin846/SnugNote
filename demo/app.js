@@ -33,7 +33,7 @@ const SEED = [
 const SEED_FLAG = "tietie-seeded";
 
 /* ---------- 状态 ---------- */
-let state = { nav: "all", sort: "pin", query: "", tag: null };
+let state = { nav: "all", sort: "pin", query: "", tags: [] }; // tags：多选标签，空数组 = 不筛
 let editingId = null; // null = 新建
 let notes = [];       // 从 store 加载
 let store = null;     // 启动时由 openStore() 探测：exe 文件模式 / IndexedDB 回退
@@ -57,6 +57,12 @@ function escapeHtml(s) {
     "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
   }[c]));
 }
+// 标签配色：按名字哈希出固定色相（同名标签永远同色）。选中时用更深、更饱和的一档。
+function tagHue(name) {
+  let h = 0;
+  for (const c of String(name)) h = (h * 31 + c.charCodeAt(0)) % 360;
+  return h;
+}
 
 /* ---------- 渲染 ---------- */
 function visibleNotes() {
@@ -64,7 +70,7 @@ function visibleNotes() {
     if (n.archived !== (state.nav === "archived")) return false;
     if (state.nav === "todo" && n.done) return false;
     if (state.nav === "done" && !n.done) return false;
-    if (state.tag && !n.tags.includes(state.tag)) return false;
+    if (state.tags.length && !state.tags.every((t) => n.tags.includes(t))) return false; // 多选标签：AND
     if (state.query) {
       const q = state.query.toLowerCase();
       const hay = (n.title + " " + n.content + " " + n.tags.join(" ")).toLowerCase();
@@ -131,13 +137,27 @@ function render() {
   });
   const tagSet = new Set();
   notes.forEach((n) => n.tags.forEach((t) => tagSet.add(t)));
-  $("#tagList").innerHTML = [...tagSet].map((t) =>
-    `<button class="tag-chip ${state.tag === t ? "active" : ""}" data-tag="${escapeHtml(t)}">
-       <span class="dot" style="background:var(--note-edge)"></span>${escapeHtml(t)}
-     </button>`).join("");
+  const tagChips = [...tagSet].sort((a, b) => a.localeCompare(b, "zh")).map((t) => {
+    const on = state.tags.includes(t);
+    const h = tagHue(t);                       // 同一色相：未选中(tint) / 选中(实心深色)
+    const style = on
+      ? `background:hsl(${h} 72% 38%);border-color:hsl(${h} 72% 38%);color:#fff`
+      : `background:hsl(${h} 82% 95%);border-color:hsl(${h} 60% 84%);color:hsl(${h} 60% 30%)`;
+    const dot = on ? `background:rgba(255,255,255,.95)` : `background:hsl(${h} 72% 55%)`;
+    return `<button class="tag-chip ${on ? "active" : ""}" data-tag="${escapeHtml(t)}"
+              aria-pressed="${on}" title="${on ? "点击取消该标签" : "点击累加筛选"}" style="${style}">
+              <span class="dot" style="${dot}"></span>${escapeHtml(t)}
+            </button>`;
+  }).join("");
+  const clearBtn = state.tags.length
+    ? `<button class="tag-chip tag-clear" data-clear-tags="1" title="清除全部标签筛选">✕ 清除</button>`
+    : "";
+  $("#tagList").innerHTML = tagChips + clearBtn;
 
   const names = { all: "全部便签", todo: "进行中", done: "已完成", archived: "归档" };
-  $("#heading").textContent = names[state.nav];
+  $("#heading").textContent = state.tags.length
+    ? `${names[state.nav]} · 标签：${state.tags.map((t) => "#" + t).join(" + ")}`
+    : names[state.nav];
   const list = visibleNotes();
   $("#countText").textContent = `${list.length} 条`;
   board.innerHTML = list.length
@@ -232,11 +252,16 @@ $("#searchInput").addEventListener("input", (e) => { state.query = e.target.valu
 document.querySelectorAll(".filter-chip").forEach((el) =>
   el.addEventListener("click", () => { state.sort = el.dataset.sort; render(); }));
 document.querySelectorAll("[data-nav]").forEach((el) =>
-  el.addEventListener("click", () => { state.nav = el.dataset.nav; state.tag = null; render(); }));
+  el.addEventListener("click", () => { state.nav = el.dataset.nav; state.tags = []; render(); }));
 $("#tagList").addEventListener("click", (e) => {
+  const clear = e.target.closest("[data-clear-tags]");
+  if (clear) { state.tags = []; render(); return; }
   const t = e.target.closest("[data-tag]");
   if (!t) return;
-  state.tag = state.tag === t.dataset.tag ? null : t.dataset.tag;
+  const name = t.dataset.tag;
+  state.tags = state.tags.includes(name)
+    ? state.tags.filter((x) => x !== name)   // 再点一次 = 取消该标签
+    : [...state.tags, name];                 // 累加多选
   render();
 });
 $("#newBtn").addEventListener("click", () => openModal(null));
