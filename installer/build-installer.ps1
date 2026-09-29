@@ -85,11 +85,26 @@ function ConvertTo-CsLiteral([string]$s) {
 # data/ is deliberately absent: the installer must never create or touch it.
 $installed = @(
   @{ rel = ($appName + '.exe');         src = (Join-Path $root ($appName + '.exe')) },
+  # v14: Sticker.exe is GONE from the payload. The launcher and the sticker program are now ONE
+  # exe (launcher/build.ps1 compiles both trees), and the auto-start starts that exe with --sticker.
+  # Shipping a second exe again would re-create the "notfound / stale copy" failure class.
   @{ rel = 'demo/index.html';           src = (Join-Path $root 'demo\index.html') },
   @{ rel = 'demo/styles.css';           src = (Join-Path $root 'demo\styles.css') },
   @{ rel = 'demo/app.js';               src = (Join-Path $root 'demo\app.js') },
   @{ rel = 'demo/store.js';             src = (Join-Path $root 'demo\store.js') },
   @{ rel = 'demo/demo-standalone.html'; src = (Join-Path $root 'demo\demo-standalone.html') },
+  # v25: the front-end became an installable web app (a PWA on a phone), so the payload gained a
+  # manifest, a service worker and the phone icon set. demo/ is not part of the launcher exe's
+  # build manifest, so these ride in the installer payload only - but they MUST be listed here,
+  # or an installed copy would silently lack them and the uninstaller would leave them behind
+  # (FileList.cs below is generated from this very list).
+  @{ rel = 'demo/manifest.json';        src = (Join-Path $root 'demo\manifest.json') },
+  @{ rel = 'demo/sw.js';                src = (Join-Path $root 'demo\sw.js') },
+  @{ rel = 'demo/icons/icon-192.png';           src = (Join-Path $root 'demo\icons\icon-192.png') },
+  @{ rel = 'demo/icons/icon-512.png';           src = (Join-Path $root 'demo\icons\icon-512.png') },
+  @{ rel = 'demo/icons/icon-maskable-192.png';  src = (Join-Path $root 'demo\icons\icon-maskable-192.png') },
+  @{ rel = 'demo/icons/icon-maskable-512.png';  src = (Join-Path $root 'demo\icons\icon-maskable-512.png') },
+  @{ rel = 'demo/icons/apple-touch-icon.png';   src = (Join-Path $root 'demo\icons\apple-touch-icon.png') },
   @{ rel = ($uninsStem + '.exe') }      # source assigned once it is compiled
 )
 

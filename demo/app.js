@@ -9,28 +9,6 @@ const COLORS = [
   { key: "orange", hex: "#ffe8d3" },
 ];
 
-/* ---------- 首次种子数据（仅当库为空且从未 seed 过时写入） ---------- */
-const SEED = [
-  { id: "seed-1", color: "yellow", title: "周末采购清单", done: false, pinned: false, archived: false, dueAt: "", tags: ["生活"], content: "",
-    checklist: [
-      { text: "鲜牛奶 2 盒", done: true }, { text: "鸡蛋 30 个", done: false },
-      { text: "咖啡豆", done: false }, { text: "燕麦片", done: true },
-    ] },
-  { id: "seed-2", color: "pink", title: "健身打卡", done: false, pinned: false, archived: false, dueAt: nextDay(1), tags: ["健康", "习惯"], content: "",
-    checklist: [{ text: "晨跑 30 分钟", done: false }, { text: "平板支撑 3 组", done: false }] },
-  { id: "seed-3", color: "blue", title: "读书笔记：原子习惯", done: false, pinned: true, archived: false, dueAt: "", tags: ["读书"], content: "每天进步 1%，一年后你会强 37 倍。习惯不是目标，而是系统。\n关键：让好习惯显而易见、有吸引力、简单易行、令人愉悦。", checklist: [] },
-  { id: "seed-4", color: "green", title: "项目周报（今天提交）", done: false, pinned: false, archived: false, dueAt: today(), tags: ["工作", "重要"], content: "整理本周进度 + 下周计划，下班前发给 Leader。", checklist: [
-    { text: "汇总已完成事项", done: true }, { text: "写本周风险", done: false }, { text: "排下周规划", done: false } ] },
-  { id: "seed-5", color: "purple", title: "灵感闪现", done: false, pinned: false, archived: false, dueAt: "", tags: ["灵感"], content: "做一个「便签 + 白板」的瀑布流排版，卡片支持拖拽拼图更好玩…", checklist: [] },
-  { id: "seed-6", color: "orange", title: "给妈妈打电话", done: true, pinned: false, archived: false, dueAt: nextDay(-1), tags: ["生活"], content: "提醒爸妈体检报告记得去取。", checklist: [] },
-  { id: "seed-7", color: "yellow", title: "旅行清单", done: false, pinned: true, archived: false, dueAt: nextDay(7), tags: ["旅行"], content: "国庆周边游，提前订民宿和门票。", checklist: [
-    { text: "订民宿", done: true }, { text: "买门票", done: false }, { text: "准备相机", done: false } ] },
-  { id: "seed-8", color: "blue", title: "代码重构 TODO", done: false, pinned: false, archived: false, dueAt: nextDay(3), tags: ["工作", "开发"], content: "整理 demo 的响应式断点，手机端侧栏收进底部导航。", checklist: [
-    { text: "抽离颜色变量", done: true }, { text: "统一间距", done: false } ] },
-  { id: "seed-9", color: "pink", title: "朋友生日", done: false, pinned: false, archived: true, dueAt: nextDay(15), tags: ["生活"], content: "下周三，记得订蛋糕。", checklist: [] },
-  { id: "seed-10", color: "green", title: "收藏的好文", done: true, pinned: false, archived: false, dueAt: "", tags: ["读书", "灵感"], content: "《如何用 3 秒进入心流》—— 已读完，值得回看。", checklist: [] },
-];
-const SEED_FLAG = "tietie-seeded";
 
 /* ---------- 状态 ---------- */
 let state = { nav: "all", sort: "pin", query: "", tags: [] }; // tags：多选标签，空数组 = 不筛
@@ -99,6 +77,7 @@ function noteCard(n) {
     ? `<span class="note-due ${due.cls}">⏰ ${due.text}</span>`
     : `<span class="note-due" style="visibility:hidden">—</span>`;
   const pin = n.pinned ? "on" : "";
+  const desk = deskBtn(n);            // v13：贴到桌面 / 从桌面收起（仅启动器文件模式）
   return `
     <article class="note note--${n.color} ${n.done ? "done" : ""}" data-id="${n.id}">
       <div class="note-top">
@@ -113,15 +92,61 @@ function noteCard(n) {
         <button class="mini-btn ${pin}" data-act="pin" title="置顶">📌</button>
         <button class="mini-btn ${n.done ? "on" : ""}" data-act="done" title="完成">${n.done ? "✓" : "○"}</button>
         <span class="spacer"></span>
+        ${desk}
         <button class="mini-btn" data-act="edit" title="编辑">✏️</button>
         ${n.archived
           ? `<button class="mini-btn" data-act="unarchive" title="恢复">↩️</button>
              <button class="mini-btn danger" data-act="del" title="删除">🗑️</button>`
           : `<button class="mini-btn" data-act="archive" title="归档">📦</button>`}
       </div>
+      ${desk ? `<div class="desk-hint" data-desk-hint="1"></div>` : ""}
     </article>`;
 }
 
+/* ---------- 桌面贴纸桥（v13）按钮 ----------
+ * 只在「启动器文件模式」下有这一枚：没有启动器就没有中转站，也就没人能把便签贴到桌面。
+ * 归档的便签也给按钮——它就是一张卡，用户随时要能把它从桌面收回来。
+ */
+function deskBtn(n) {
+  if (storeMode !== "file") return "";
+  const on = desktopState.placed.has(n.id);
+  return `<button class="desk-btn ${on ? "on" : ""}" data-act="desk" title="${on ? "从桌面收起这张便签" : "把这张便签贴到桌面"}">`
+    + `<span class="desk-ico">${on ? "📥" : "🖥️"}</span>`
+    + `<span class="desk-label">${on ? "从桌面收起" : "贴到桌面"}</span></button>`;
+}
+
+/* 手机端（≤680px）：两列「紧密衔接」——按 1→左、2→右、3→左… 交替分列，两列各自
+   从上往下排；卡片高度不一也不会在行间留空档，同时**保住"前两张并排"的阅读顺序**。
+   为什么不用 CSS column-count：多列是"按列优先"填充，第 2 张会被排到第 1 张下面，
+   顺序变成纵向先——那就不是桌面那种观感了。交替分列可以同时拿到顺序与紧凑。
+   安全性：所有交互都委托在 #board 上（e.target.closest('.note')），插入列容器不影响。 */
+const MASONRY_MQ = "(max-width: 680px)";
+let lastCols = 0;
+/* v29：列数随屏宽**自动**决定，不再写死 2 列 —— 320px 的老手机到 600px 的大屏
+   共用一套代码：可用宽度 / 每张卡的最小可用宽度，取 1..3 列。 */
+function masonryCols() {
+  const avail = document.documentElement.clientWidth - 28;   // 去掉 .main 左右内边距
+  const minCard = 150, gap = 9;
+  return Math.max(1, Math.min(3, Math.floor((avail + gap) / (minCard + gap))));
+}
+function relayoutIfNeeded() {
+  const n = window.matchMedia(MASONRY_MQ).matches ? masonryCols() : 0;
+  if (n !== lastCols) { lastCols = n; render(); }
+}
+function boardHtml(list) {
+  if (!window.matchMedia(MASONRY_MQ).matches) { lastCols = 0; return list.map(noteCard).join(""); }
+  lastCols = masonryCols();
+  const n = masonryCols();
+  const cols = Array.from({ length: n }, () => []);
+  list.forEach((it, i) => cols[i % n].push(noteCard(it)));
+  return cols.map((c) => `<div class="board-col">${c.join("")}</div>`).join("");
+}
+try {
+  window.matchMedia(MASONRY_MQ).addEventListener("change", relayoutIfNeeded);
+  let rt = 0;
+  window.addEventListener("resize", () => { clearTimeout(rt); rt = setTimeout(relayoutIfNeeded, 120); });
+  relayoutIfNeeded();
+} catch (e) { }
 function render() {
   document.querySelectorAll("[data-nav]").forEach((el) => {
     el.classList.toggle("active", el.dataset.nav === state.nav);
@@ -153,6 +178,8 @@ function render() {
     ? `<button class="tag-chip tag-clear" data-clear-tags="1" title="清除全部标签筛选">✕ 清除</button>`
     : "";
   $("#tagList").innerHTML = tagChips + clearBtn;
+  const mobList = $("#tagListMobile");
+  if (mobList) mobList.innerHTML = tagChips + clearBtn;
 
   const names = { all: "全部便签", todo: "进行中", done: "已完成", archived: "归档" };
   $("#heading").textContent = state.tags.length
@@ -160,9 +187,7 @@ function render() {
     : names[state.nav];
   const list = visibleNotes();
   $("#countText").textContent = `${list.length} 条`;
-  board.innerHTML = list.length
-    ? list.map(noteCard).join("")
-    : `<div class="empty"><div class="big">🗒️</div>这里还没有便签</div>`;
+  board.innerHTML = list.length ? boardHtml(list) : `<div class="empty"><div class="big">🗒️</div>这里还没有便签</div>`;
 
   document.querySelectorAll(".filter-chip").forEach((el) =>
     el.classList.toggle("active", el.dataset.sort === state.sort));
@@ -196,17 +221,199 @@ function normalize(note) {
   };
 }
 
-async function persist(note) {
+async function persist(note, changedKeys) {
   const n = normalize(note);
   const i = notes.findIndex((x) => x.id === n.id);
   if (i >= 0) notes[i] = n; else notes.push(n);
-  await store.save(n);
+  let finalNote = n;
+  try {
+    // store.save 会「读磁盘 → 只合并本次改动的字段 → 立即落盘」，并返回真正存下去的那一条
+    const saved = await store.save(n, changedKeys);
+    if (saved) finalNote = normalize(saved);
+  } catch (e) {
+    console.error("[app] 保存失败", e);
+    toast("保存失败：" + (e && e.message ? e.message : e));
+    render();
+    return;
+  }
+  const j = notes.findIndex((x) => x.id === finalNote.id);
+  if (j >= 0) notes[j] = finalNote; else notes.push(finalNote);
+  rememberBaseline(finalNote);
+  lastSignature = signature(notes);   // 本地刚写的就是磁盘现状，跟随轮询不必再重绘
   render();
+}
+
+/* ---------- 「磁盘快照」基线（S2）----------
+ * 界面上的每一条便签都记着它「从磁盘读到时」的样子。每一次落盘只声明真正改动的字段，
+ * 由 store 合并进磁盘版；落盘后再把基线刷新成磁盘上的最新形态。
+ * 这样：贴纸端刚写进去的勾选，绝不会被网页版内存里的旧整条盖掉。
+ */
+let notesBaseline = new Map();   // id -> 归一化后的 JSON 字符串
+
+function rememberBaseline(n) {
+  try { notesBaseline.set(n.id, JSON.stringify(normalize(n))); } catch (e) { /* 忽略 */ }
+}
+
+function setBaseline(list) {
+  notesBaseline = new Map();
+  for (const n of list) rememberBaseline(n);
+}
+
+/* 稳定的「内容指纹」：只含会被别处改动的字段，用来判断磁盘上是否真的变了 */
+function signature(list) {
+  return JSON.stringify(list.map((n) => [
+    n.id, n.updatedAt, n.title, n.content, n.color, n.done, n.pinned, n.archived, n.dueAt,
+    (n.tags || []).join("\u0001"),
+    (n.checklist || []).map((c) => c.text + "\u0002" + (c.done ? 1 : 0)).join("\u0001"),
+  ]));
 }
 
 async function toggleCheck(note, idx) {
   note.checklist[idx].done = !note.checklist[idx].done;
-  await persist(note);
+  note.updatedAt = Date.now();
+  // 只声明「清单第 idx 项的 done + updatedAt」：磁盘上别的东西（包括贴纸端刚写的）一律保留
+  await persist(note, ["checklistDone:" + idx, "updatedAt"]);
+}
+
+/* ---------- 桌面贴纸桥（v13）----------
+ * 为什么这么绕：浏览器不能自己创建原生桌面窗口；桌面贴纸程序有一条硬约束「自身不监听端口」
+ * （自测断言还禁用了 Socket/TcpListener/HttpListener/NamedPipe 符号），端口与管道都不可用
+ * ⇒ 只能经启动器「文件中转」：
+ *   POST /api/desktop {action:"place"|"remove", noteId}  → 启动器写一条请求（唯一写者 = 启动器）
+ *   贴纸程序最多 1 秒后消费 ⇒ 贴出 / 收起那张卡
+ *   GET  /api/desktop → 返回「已贴出清单」（唯一写者 = 贴纸程序）⇒ 按钮状态一律以它为准，
+ *                        所以在贴纸上点 ❌ 关掉那张卡，这里最多 3 秒就会变回「贴到桌面」。
+ */
+const desktopState = {
+  placed: new Set(), lastRequestSeq: 0, ackSeq: 0, savedAtMs: 0,
+  reachable: false, pendingNoteId: null, pendingAction: null, pendingSince: 0,
+  // v19：由启动器上报的真实状态（"贴纸到底在不在跑""还有几条请求没被处理"）。
+  // 旧版是让网页自己拿 seq 差去猜，并在猜不出来时叫用户去双击一个手册文件——那条提示已删除。
+  stickerRunning: false, pendingRequests: 0,
+};
+
+function deskWaitingMs() {
+  return desktopState.pendingSince ? Date.now() - desktopState.pendingSince : 0;
+}
+
+async function pollDesktop() {
+  if (storeMode !== "file") return;
+  try {
+    const r = await fetch("/api/desktop", { cache: "no-store" });
+    if (!r.ok) throw new Error("HTTP " + r.status);
+    const j = await r.json();
+    desktopState.reachable = true;
+    const real = new Set((j.placed || []).map((p) => p.noteId));
+    const waiting = (j.lastRequestSeq || 0) > (j.ackSeq || 0);
+    // 自己刚发出、贴纸端还没消费的那一条：先按目标态显示（真实状态一旦确认就以它为准）
+    if (waiting && desktopState.pendingNoteId) {
+      if (desktopState.pendingAction === "place") real.add(desktopState.pendingNoteId);
+      else real.delete(desktopState.pendingNoteId);
+    }
+    desktopState.placed = real;
+    desktopState.lastRequestSeq = j.lastRequestSeq || 0;
+    desktopState.ackSeq = j.ackSeq || 0;
+    desktopState.savedAtMs = j.placedSavedAtMs || 0;
+    desktopState.stickerRunning = !!j.stickerRunning;                    // v19
+    desktopState.pendingRequests = j.pendingRequests || 0;               // v19
+    if (!waiting) { desktopState.pendingNoteId = null; desktopState.pendingAction = null; desktopState.pendingSince = 0; }
+    else if (!desktopState.pendingSince) desktopState.pendingSince = Date.now();
+  } catch (e) {
+    desktopState.reachable = false;      // 启动器没在跑 / 版本太旧：按钮保持"最后已知"，并给提示
+  }
+  refreshDesktop();
+}
+
+/* 只改按钮与那行小字，不重绘整个面板（重绘会打断滚动与输入） */
+function refreshDesktop() {
+  document.querySelectorAll(".note").forEach((card) => {
+    const id = card.dataset.id;
+    const btn = card.querySelector('[data-act="desk"]');
+    if (btn) {
+      const on = desktopState.placed.has(id);
+      const ico = btn.querySelector(".desk-ico");
+      const lab = btn.querySelector(".desk-label");
+      if (ico) ico.textContent = on ? "📥" : "🖥️";
+      if (lab) lab.textContent = on ? "从桌面收起" : "贴到桌面";
+      btn.classList.toggle("on", on);
+      btn.title = on ? "从桌面收起这张便签" : "把这张便签贴到桌面";
+    }
+    const hint = card.querySelector("[data-desk-hint]");
+    if (hint) {
+      const waiting = deskWaitingMs() > 5000 && desktopState.pendingNoteId === id;
+      // v19：不再让用户去找/双击任何文件——启动器会自己把贴纸拉起来；这里只说清"现在到哪一步了"
+      hint.textContent = waiting
+        ? (desktopState.stickerRunning ? "贴纸程序正在处理…" : "贴纸程序未在运行，正在自动启动…")
+        : "";
+    }
+  });
+
+  // 全局提示（v13 实测补）：逐卡那行小字在「刷新页面后」会丢（pendingNoteId 归零），
+  // 于是"点了没反应"变成无从判断。v19 起以启动器上报的真实状态（stickerRunning / pendingRequests）
+  // 说话，话术里不再出现任何"请手动双击某个 exe"。
+  const host = $("#countText");
+  if (host && !$("#deskWait")) {
+    const w = document.createElement("span");
+    w.id = "deskWait";
+    w.className = "desk-wait";
+    host.parentNode.insertBefore(w, host.nextSibling);
+  }
+  const waitEl = $("#deskWait");
+  if (waitEl) {
+    const pending = desktopState.pendingRequests || 0;
+    if (!desktopState.reachable) {
+      waitEl.textContent = "启动器没在运行 —— 请启动「贴贴便签」再刷新本页（桌面贴纸由它转发请求）";
+    } else if (pending > 0 && deskWaitingMs() > 4000) {
+      waitEl.textContent = desktopState.stickerRunning
+        ? "贴纸程序正在处理 " + pending + " 条请求…"
+        : "贴纸程序未在运行，已自动尝试启动（还有 " + pending + " 条请求待处理）";
+    } else {
+      waitEl.textContent = "";
+    }
+  }
+}
+
+async function deskAct(note) {
+  const action = desktopState.placed.has(note.id) ? "remove" : "place";
+  try {
+    const r = await fetch("/api/desktop", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action, noteId: note.id }),
+    });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok || !j.ok) {
+      // 最常见的失败：浏览器里的页面已经是新版，但正在跑的还是旧启动器（没有 /api/desktop）
+      const old = (r.status === 404 || r.status === 405 || !j.error);
+      toast("贴到桌面失败：" + (j.error || ("HTTP " + r.status))
+        + (old ? "（请重启启动器：关掉「贴贴便签」窗口，再双击它）" : ""));
+      return;
+    }
+    desktopState.pendingNoteId = note.id;
+    desktopState.pendingAction = action;
+    desktopState.pendingSince = Date.now();
+    if (j.seq) desktopState.lastRequestSeq = j.seq;
+    // 乐观反馈：立刻切到目标态，下一次轮询以真实状态为准
+    if (action === "place") desktopState.placed.add(note.id); else desktopState.placed.delete(note.id);
+    // v13.1：启动器会顺手把贴纸程序拉起来（如果没在跑），这里按它的回执说清结果。
+    // v19：回执里已经不再有"找不到贴纸程序文件"这一类失败（贴纸就是本 exe 的另一种模式），
+    // 而且不再给"请手动双击某个文件"的指示——真失败了只指向启动器窗口里的日志。
+    const launchMsg = {
+      started: "已自动启动贴纸程序，1–2 秒后贴上",
+      starting: "贴纸程序正在启动…",
+      running: "贴纸程序已在运行",
+      disabled: "已跳过自动启动（自动化开关）",
+      notfound: "自动启动失败：取不到本程序自身路径",
+      failed: "自动启动贴纸程序失败",
+    }[j.sticker];
+    const failHint = (j.sticker === "failed" || j.sticker === "notfound")
+      ? "（详见「贴贴便签」窗口里的日志）" : "";
+    toast((launchMsg || (action === "place" ? "已请求贴到桌面" : "已请求从桌面收起")) + failHint);
+    refreshDesktop();
+    setTimeout(pollDesktop, 900);
+  } catch (e) {
+    toast("贴到桌面失败：" + (e && e.message ? e.message : e));
+  }
 }
 
 board.addEventListener("click", async (e) => {
@@ -221,18 +428,26 @@ board.addEventListener("click", async (e) => {
   if (actBtn) {
     e.stopPropagation();
     const act = actBtn.dataset.act;
-    if (act === "pin") note.pinned = !note.pinned;
-    else if (act === "done") note.done = !note.done;
-    else if (act === "archive") note.archived = true;
-    else if (act === "unarchive") note.archived = false;
+    let changed = null;
+    // 桌面桥：不碰 notes.json（一个字节都不写），只让启动器转一条请求给贴纸程序
+    if (act === "desk") { await deskAct(note); return; }
+    if (act === "pin") { note.pinned = !note.pinned; changed = ["pinned"]; }
+    else if (act === "done") { note.done = !note.done; changed = ["done"]; }
+    else if (act === "archive") { note.archived = true; changed = ["archived"]; }
+    else if (act === "unarchive") { note.archived = false; changed = ["archived"]; }
     else if (act === "del") {
       notes = notes.filter((n) => n.id !== note.id);
       await store.remove(note.id);
+      notesBaseline.delete(note.id);
+      lastSignature = signature(notes);
       toast("已删除");
       render();
       return;
     } else if (act === "edit") { openModal(note); return; }
-    await persist(note);
+    if (!changed) return;
+    note.updatedAt = Date.now();
+    changed.push("updatedAt");
+    await persist(note, changed);
     return;
   }
   openModal(note);
@@ -253,7 +468,9 @@ document.querySelectorAll(".filter-chip").forEach((el) =>
   el.addEventListener("click", () => { state.sort = el.dataset.sort; render(); }));
 document.querySelectorAll("[data-nav]").forEach((el) =>
   el.addEventListener("click", () => { state.nav = el.dataset.nav; state.tags = []; render(); }));
-$("#tagList").addEventListener("click", (e) => {
+/* 标签点击：委托到 document —— 桌面侧边栏的 #tagList 与手机抽屉的 #tagListMobile
+   共用同一段逻辑（v28：手机上多了一个入口，不需要复制一份处理代码）。 */
+document.addEventListener("click", (e) => {
   const clear = e.target.closest("[data-clear-tags]");
   if (clear) { state.tags = []; render(); return; }
   const t = e.target.closest("[data-tag]");
@@ -266,6 +483,19 @@ $("#tagList").addEventListener("click", (e) => {
 });
 $("#newBtn").addEventListener("click", () => openModal(null));
 $("#newBtnMobile").addEventListener("click", () => openModal(null));
+
+/* ---------- 手机：☰ = 按标签筛选抽屉 ---------- */
+(function initTagDrawer() {
+  const btn = $("#menuBtn"), drawer = $("#tagDrawer"), mask = $("#drawerMask"), done = $("#drawerDone");
+  if (!btn || !drawer) return;
+  const setOpen = (v) => {
+    drawer.classList.toggle("open", v);
+    if (mask) mask.classList.toggle("open", v);
+  };
+  btn.addEventListener("click", () => setOpen(!drawer.classList.contains("open")));
+  if (mask) mask.addEventListener("click", () => setOpen(false));
+  if (done) done.addEventListener("click", () => setOpen(false));
+})();
 
 /* ---------- 导出 / 导入 ---------- */
 function exportJSON() {
@@ -289,7 +519,6 @@ function importJSON(file) {
       const valid = arr.filter((n) => n && typeof n === "object").map((n) => normalize(n));
       await store.saveMany(valid);
       notes = await store.getAll();
-      localStorage.setItem(SEED_FLAG, "1");
       render();
       toast(`已导入 ${arr.length} 条`);
     } catch (err) {
@@ -342,17 +571,29 @@ $("#modalMask").addEventListener("click", (e) => { if (e.target === e.currentTar
 
 $("#saveBtn").addEventListener("click", async () => {
   const title = $("#fTitle").value.trim() || "无标题";
-  const checklist = $("#fChecklist").value.split("\n").map((s) => s.trim()).filter(Boolean)
-    .map((text) => ({ text, done: false }));
   const tags = $("#fTags").value.split(/[,，]/).map((s) => s.trim()).filter(Boolean);
   const dueAt = $("#fDue").value;
+
+  // S2 修复：保留原有勾选状态（按文字匹配，同名的按先后顺序一一对应）。
+  // 旧版这里把每一项都硬写成 done:false —— 用户刚在桌面贴纸上勾好的，一编辑保存就全没了。
+  const existing = editingId ? (((notes.find((n) => n.id === editingId) || {}).checklist) || []) : [];
+  const usedPrev = new Set();
+  const checklist = $("#fChecklist").value.split("\n").map((s) => s.trim()).filter(Boolean)
+    .map((text) => {
+      let done = false;
+      for (let i = 0; i < existing.length; i++) {
+        if (!usedPrev.has(i) && existing[i].text === text) { usedPrev.add(i); done = !!existing[i].done; break; }
+      }
+      return { text, done };
+    });
 
   if (editingId) {
     const note = notes.find((n) => n.id === editingId);
     if (note) {
       note.title = title; note.content = $("#fContent").value.trim(); note.color = pickedColor;
       note.tags = tags; note.dueAt = dueAt; note.checklist = checklist; note.updatedAt = Date.now();
-      await persist(note);
+      // 只声明这些字段：磁盘上没被这里改到的内容（例如贴纸端写的勾选）保持不动
+      await persist(note, ["title", "content", "color", "tags", "dueAt", "checklist", "updatedAt"]);
     }
     toast("已保存");
   } else {
@@ -361,7 +602,7 @@ $("#saveBtn").addEventListener("click", async () => {
       dueAt, tags, content: $("#fContent").value.trim(), checklist,
       createdAt: Date.now(), updatedAt: Date.now(),
     };
-    await persist(note);
+    await persist(note, null);   // 新便签：整条写入
     toast("已创建");
   }
   closeModal();
@@ -390,13 +631,37 @@ async function boot() {
   }
 
   notes = await store.getAll();
-  if (!localStorage.getItem(SEED_FLAG) && notes.length === 0) {
-    const seeds = SEED.map((s) => normalize(s));
-    await store.saveMany(seeds);
-    notes = seeds;
-    localStorage.setItem(SEED_FLAG, "1");
-  }
+  setBaseline(notes);   // 记下「从磁盘读到的样子」，后面每次落盘只提交真正改动的字段
+  // v22（用户 2026-09-22 报「安装包安装后,会有测试用的便签残余」）：这里原本会在“库为空”时写入 10 条
+  // 示例便签（当时写死了 10 条）。已整块删除：空库就是空库（页面上本来就有「🗒️ 这里还没有便签」的空状态），
+  // 示例数据只会变成用户装完要自己收拾的垃圾。
+  await pollDesktop();  // 先问一次桌面现状，免得按钮先画出「贴到桌面」再跳成「从桌面收起」
   render();
+  startFileWatch();     // 文件模式下跟着磁盘走：贴纸端勾上的，页面上也会跟着变
+}
+
+/* ---------- 文件模式的轻量跟随（S2）----------
+ * 桌面贴纸端会直接改 data/notes.json。网页版没有推送通道，所以这里每 3 秒比对一次内容指纹：
+ * 只有「磁盘真的变了 / 页面可见 / 没在编辑」时才重载重绘，绝不打断正在输入的人。
+ */
+let lastSignature = "";
+function startFileWatch() {
+  if (storeMode !== "file") return;
+  lastSignature = signature(notes);
+  setInterval(async () => {
+    if (document.hidden) return;
+    if ($("#modalMask").classList.contains("open")) return;
+    await pollDesktop();          // v13：贴纸上的 ❌ / 新贴出的卡，最多 3 秒后反映到按钮上
+    try {
+      const fresh = await store.getAll();
+      if (signature(fresh) === lastSignature) return;
+      notes = fresh.map((n) => normalize(n));
+      setBaseline(notes);
+      lastSignature = signature(notes);
+      render();
+      console.log("[app] 磁盘内容已变化（可能是桌面贴纸端写入），界面已同步");
+    } catch (e) { /* 单次读取失败不打扰用户 */ }
+  }, 3000);
 }
 boot();
 console.log(

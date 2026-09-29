@@ -130,6 +130,9 @@ static class Program
             }
             Console.WriteLine("\u5DF2\u5378\u8F7D\uFF0C\u6E05\u7406 " + n + " \u4E2A\u6587\u4EF6");
             Console.WriteLine("\u4FBF\u7B7E\u6570\u636E\u4FDD\u7559\u5728\uFF1A" + Path.Combine(d, "data"));
+            // 与图形版（UninstallForm.OnFormClosed）一致：卸载器删不掉"正在运行的自己"。
+            // MOVEFILE_DELAY_UNTIL_REBOOT 需要管理员权限：拿不到就只是留下这一个文件，不算失败。
+            try { NativeMethods.MoveFileEx(Application.ExecutablePath, null, NativeMethods.MOVEFILE_DELAY_UNTIL_REBOOT); } catch { }
             return;
         }
         Application.Run(new UninstallForm());
@@ -351,6 +354,17 @@ static class InstallCore
         }
     }
 
+    // v14: files an OLDER install left next to the app that THIS version no longer ships.
+    // 贴纸程序已并入 <app>.exe（一个文件两种模式），所以旧版留下的 Sticker.exe 是死重；
+    // 而卸载器的文件清单里已经没有它，不在这里清就再也没人会清。data\ 一律不碰。
+    static void DropObsoleteFiles(string dir)
+    {
+        // Legacy.TryDeleteFile is private to that class; deleting here is 2 lines and keeps
+        // the dependency direction one-way (Legacy is about the RENAMED old product, not this).
+        try { string f1 = Path.Combine(dir, "Sticker.exe"); if (File.Exists(f1)) File.Delete(f1); } catch { }
+        try { string f2 = Path.Combine(dir, "Sticker.exe.config"); if (File.Exists(f2)) File.Delete(f2); } catch { }
+    }
+
     // 无界面完整安装
     public static bool Headless(string dir, bool noDesktop, out string err)
     {
@@ -359,6 +373,7 @@ static class InstallCore
         try
         {
             MaterializeAll(dir);
+            DropObsoleteFiles(dir);   // v14
 
             string problems;
             string made = CreateShortcuts(dir, !noDesktop, out problems);

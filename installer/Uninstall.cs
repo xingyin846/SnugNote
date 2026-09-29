@@ -86,6 +86,8 @@ static class UninstallCore
         catch { }
 
         // 4) 清理空目录：data 非空 → 整目录自然保留（正是我们要的结果）
+        //    v25: demo\icons\ 是子目录，不先删掉它的话 demo\ 永远不空，会残留一个空壳目录
+        TryDeleteEmptyDir(Path.Combine(dir, "demo", "icons"));
         TryDeleteEmptyDir(Path.Combine(dir, "demo"));
         TryDeleteEmptyDir(dir);
         return true;

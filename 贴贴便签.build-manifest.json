@@ -1,0 +1,33 @@
+{
+  "app": "tietie-merged",
+  "builtAtUtc": "2026-09-29 09:26:29",
+  "compiler": "4.8.9221.0 built by: NET481REL1LAST_25H2",
+  "compilerPath": "C:\\Windows\\Microsoft.NET\\Framework64\\v4.0.30319\\csc.exe",
+  "sourcesRoot": "D:\\work\\AI项目\\任务便签",
+  "cscArgs": "/nologo /target:winexe /platform:anycpu /optimize+ /warn:4 /codepage:65001 /main:TietieLauncher /out:\"D:\\work\\AI项目\\任务便签\\贴贴便签.exe\" /win32icon:D:\\work\\AI项目\\任务便签\\launcher\\app.ico /reference:\"C:\\Windows\\Microsoft.NET\\Framework64\\v4.0.30319\\System.dll\" /reference:\"C:\\Windows\\Microsoft.NET\\Framework64\\v4.0.30319\\System.Core.dll\" /reference:\"C:\\Windows\\Microsoft.NET\\Framework64\\v4.0.30319\\System.Drawing.dll\" /reference:\"C:\\Windows\\Microsoft.NET\\Framework64\\v4.0.30319\\System.Windows.Forms.dll\"",
+  "exe": {
+    "file": "贴贴便签.exe",
+    "bytes": 358912,
+    "sha256": "A149B1418613913658CD2E3E241AE531BC8FE3FC864007BB665982E8929A30F6"
+  },
+  "sources": [
+    { "name": "launcher/Program.cs", "bytes": 79880, "sha256": "EE82A0FAE295738443FE6FAEFA9F97D2B99E3E6916BEE26812539E7FF7AF3041" },
+    { "name": "launcher/LauncherWindow.cs", "bytes": 29281, "sha256": "5EBDC62C69F6CC9792143A533322F43BDE28FF02208CCB72266A2D9E258700D4" },
+    { "name": "desktop-sticker/src/CardRenderer.cs", "bytes": 13547, "sha256": "964EEE26A0D9622E310770FE4EA2ABB3677DDC9D315879A27B6CDC7FFD9A7B90" },
+    { "name": "desktop-sticker/src/DesktopBridge.cs", "bytes": 20614, "sha256": "76E4EF7A0923FDF10FAE37E01A6F649F72036FFDAA6F2F8534DB7044444A8776" },
+    { "name": "desktop-sticker/src/Geometry.cs", "bytes": 4007, "sha256": "2D746DCF9856E17B8CCC3E7FB6A424D70982C3398D9C497C9C223472A98CF50B" },
+    { "name": "desktop-sticker/src/Json.cs", "bytes": 12971, "sha256": "09CA80003F0C63A2DBF52538F13AEE9A91E6E2381BAE1A4B367FDC7A7C5BAEAE" },
+    { "name": "desktop-sticker/src/Log.cs", "bytes": 2649, "sha256": "49DFE8C2B1B73320FE556756F9AF75A397DCB016534CD266B9807F128B25D9F2" },
+    { "name": "desktop-sticker/src/Notes.cs", "bytes": 11584, "sha256": "0AADBA83EFE252ECFFF07D3C20AE75B29925823EDDE9F6CCC33D670B745D4E57" },
+    { "name": "desktop-sticker/src/NotesWriter.cs", "bytes": 25050, "sha256": "FE382A9EF7A67438119916195124C43B945BE1BC8BB3F44A0551CBE8208D788D" },
+    { "name": "desktop-sticker/src/Palette.cs", "bytes": 2846, "sha256": "CBF1D9F751762976C6386F8185DC4FA94CF150DA696130194FF02A6DAA8E6547" },
+    { "name": "desktop-sticker/src/Program.cs", "bytes": 26426, "sha256": "988C564793FBB1EB258D2ADE79E37E29F42FC9D14BCE1AE3A40E1CE6F893F2D3" },
+    { "name": "desktop-sticker/src/SelfTest.cs", "bytes": 143622, "sha256": "5C3F795D0D865CCF6B643B82AA3F9FF2C5A719E66B8F3138C0120DC113153D5E" },
+    { "name": "desktop-sticker/src/State.cs", "bytes": 17923, "sha256": "01581D5A82572495F3FA22FDF1D1E6E28EF2E990693C891D092A52AEB5465AFF" },
+    { "name": "desktop-sticker/src/StickerForm.cs", "bytes": 26800, "sha256": "63E7BDAFCDCEE1BDF3070885BD690BCE971C01F93A29844F019ED5AE4A3A8650" },
+    { "name": "desktop-sticker/src/StickerManager.cs", "bytes": 40315, "sha256": "BBEF80B24696D77A549AB102D758E885CBAFE8F033DD217186EF141FEB2FF35F" },
+    { "name": "desktop-sticker/src/TrayMenu.cs", "bytes": 7517, "sha256": "2969D49FE1694340C3133C86AAD690A5AF1C165FF521494BA0F93EF6B72D0907" },
+    { "name": "desktop-sticker/src/Typo.cs", "bytes": 22573, "sha256": "5557859B4CD0A43ACA3073AAC85967C203128176C877B44781667F614063506B" },
+    { "name": "desktop-sticker/src/UiStrings.cs", "bytes": 3212, "sha256": "CF6F41B373D7FE7BFDA2D562BA84F2D294A39E6FF40DAC8C782D9DA63FFE4314" }
+  ]
+}

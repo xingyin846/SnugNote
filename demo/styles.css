@@ -324,7 +324,7 @@ button {
 /* 便签墙 grid */
 .board {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
   gap: var(--gap);
   align-items: start;
 }
@@ -436,6 +436,7 @@ button {
 .mini-btn {
   width: 30px;
   height: 30px;
+  flex: 0 0 30px;      /* v13.1：脚部一行变挤时，图标按钮不许被压缩 */
   border-radius: 9px;
   display: grid;
   place-items: center;
@@ -446,6 +447,37 @@ button {
 .mini-btn:hover { background: color-mix(in srgb, var(--note-edge) 40%, transparent); color: var(--text); transform: translateY(-1px); }
 .mini-btn.on { color: #ff7a9e; }
 .mini-btn.danger:hover { color: #d64545; }
+
+/* ---------- v13：桌面贴纸桥按钮（贴到桌面 / 从桌面收起） ---------- */
+.desk-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex: 0 0 auto;      /* v13.1：文字按钮按内容占位，不被压扁 */
+  height: 26px;
+  padding: 0 9px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+  color: color-mix(in srgb, var(--text) 68%, transparent);
+  background: color-mix(in srgb, var(--note-edge) 32%, transparent);
+  transition: background 0.15s, color 0.15s, transform 0.12s;
+}
+.desk-btn:hover { background: color-mix(in srgb, var(--note-edge) 58%, transparent); color: var(--text); transform: translateY(-1px); }
+/* 已贴出：用产品主色提示「这张正在桌面上」 */
+.desk-btn.on { color: #ff7a9e; background: color-mix(in srgb, #ff7a9e 16%, transparent); }
+/* 等待贴纸程序响应的小字（只在点过、且超过 5 秒没被消费时出现） */
+.desk-hint { font-size: 11.5px; line-height: 1.5; color: var(--text-soft); padding: 2px 2px 0; }
+.desk-hint:empty { display: none; }
+/* 全局提示：说清是「启动器没开」还是「贴纸程序没开」（这两种都会让按钮看着"没反应"） */
+.desk-wait { font-size: 12px; font-weight: 600; color: #d64545; margin-left: 10px; }
+.desk-wait:empty { display: none; }
+/* 窄屏：脚部一行放不下，按钮退化成图标 */
+@media (max-width: 640px) {
+  .desk-btn .desk-label { display: none; }
+  .desk-btn { padding: 0 7px; }
+}
 
 /* 空状态 */
 .empty {
@@ -572,3 +604,182 @@ button {
   pointer-events: none;
 }
 .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+/* ============================================================================
+   窄屏（手机）适配 —— 顶栏压成一行，整页不再被撑宽
+   ----------------------------------------------------------------------------
+   原因：桌面版布局里 .brand 与 .topbar-actions 都是 flex-shrink:0，而 .search
+   没有 min-width:0 ⇒ 顶部栏的最小宽度约 652px，任何手机屏都会被它撑出横向
+   滚动（390px 下实测溢出 156px，连筛选胶囊和卡片右边都被连累）。
+   原则：**按钮一个不少、顺序与电脑版完全一致**，只是把宽度让出来。
+   ============================================================================ */
+.search { min-width: 0; }                    /* 关键：允许搜索框收缩 */
+
+@media (max-width: 680px) {
+  .topbar {
+    gap: 8px;
+    padding: 10px 12px;
+    padding-top: calc(10px + env(safe-area-inset-top));   /* 状态栏 / 刘海 */
+  }
+  /* 品牌只留图钉标，把宽度让给搜索框（它不是按钮，按钮全保留） */
+  .brand { font-size: 0; gap: 0; }
+  .brand .logo { width: 32px; height: 32px; border-radius: 10px; font-size: 17px; }
+
+  .search { padding: 8px 12px; gap: 6px; }
+  .search input { font-size: 13px; }
+
+  .topbar-actions { gap: 6px; }
+  .icon-btn { width: 34px; height: 34px; border-radius: 10px; font-size: 16px; }
+  /* 「＋ 新建便签」退化成只有 ＋：用 ::before 换文字，不改 HTML */
+  .primary-btn { padding: 9px 11px; gap: 0; font-size: 0; }
+  .primary-btn::before { content: "＋"; font-size: 18px; line-height: 1; }
+
+  /* 给固定在底部的导航栏留出空间（含手势条） */
+  .main { padding: 16px 14px calc(96px + env(safe-area-inset-bottom)); }
+  .main-top { gap: 8px; margin-bottom: 14px; }
+  .main-top h1 { font-size: 19px; }
+  .filter-chip { padding: 7px 12px; font-size: 12px; }
+
+  .bottomnav .bn-item { padding: 6px 8px; }    /* 5 个项在 360px 上也不挤 */
+}
+
+/* ============================================================================
+   手机（≤680px）：每行 2 张便签 + 卡片整体缩小 + 两列各自紧密衔接
+   ----------------------------------------------------------------------------
+   · 列数必须与卡片内部尺寸成对调整：390px 上两列时每张卡约 174px、内部约 142px，
+     而卡片底部那一排（📌 + ○ + 贴到桌面 + 编辑 + 删除）按桌面尺寸要约 150px ⇒ 会挤爆。
+   · 「紧密衔接」靠 app.js 的 boardHtml() 交替分列（1→左、2→右…）：每列是一个纵向
+     flex 栈 ⇒ 各列各自往下排、行间不留空档，同时保住「前两张并排」的阅读顺序。
+     纯 CSS 的 column-count 做不到——它是按列优先填充，第 2 张会掉到第 1 张下面。
+   ============================================================================ */
+@media (max-width: 680px) {
+  .board {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 9px;
+    align-items: start;
+  }
+  .board-col { display: flex; flex-direction: column; gap: 9px; min-width: 0; }
+
+  .note { padding: 13px 13px 10px; border-radius: 15px; }
+  .note::before { height: 4px; }
+  .note h3 { font-size: 15px; margin: 2px 0 5px; line-height: 1.3; }
+  .note .body { font-size: 12.5px; line-height: 1.5; margin-bottom: 8px; }
+  .note-tags { gap: 5px; margin-bottom: 7px; }
+  .note-tags .tag { font-size: 10.5px; padding: 2px 7px; }
+  .note-checklist { gap: 5px; margin-bottom: 7px; }
+  .check-item { font-size: 12px; gap: 6px; }
+  .note-foot { gap: 3px; padding-top: 7px; }
+  .mini-btn { width: 28px; height: 28px; flex: 0 0 28px; font-size: 13px; }
+  .desk-btn { height: 24px; padding: 0 7px; font-size: 11.5px; }
+}
+
+@media (max-width: 420px) {
+  .board { gap: 9px; }
+  .note { padding: 10px 10px 8px; border-radius: 13px; }
+  .note::before { height: 3px; }
+  .note-top { gap: 4px; margin-bottom: 3px; }
+  .note-due { font-size: 10px; padding: 2px 6px; gap: 3px; }
+  .note-flag { font-size: 11px; }
+  .note h3 { font-size: 13px; margin: 1px 0 3px; }
+  .note .body { font-size: 11px; margin-bottom: 6px; line-height: 1.45; }
+  .note-tags { gap: 4px; margin-bottom: 5px; }
+  .note-tags .tag { font-size: 9.5px; padding: 1px 6px; }
+  .note-checklist { gap: 3px; margin-bottom: 5px; }
+  .check-item { font-size: 11px; gap: 5px; }
+  .check-item input { width: 13px; height: 13px; margin-top: 2px; }
+  .note-foot { gap: 2px; padding-top: 5px; }
+  .mini-btn { width: 24px; height: 24px; flex: 0 0 24px; border-radius: 7px; font-size: 12px; }
+  .desk-btn { height: 21px; padding: 0 5px; font-size: 11px; border-radius: 6px; }
+}
+
+/* ============================================================================
+   手机端两处修正（2026-09-29，据用户真机截图）
+   ----------------------------------------------------------------------------
+   ① 搜索文字溢出白底胶囊：只给 .search 加 min-width:0 是不够的 —— .search 是 flex
+      容器、能缩，但它里面那个 <input> 自己是 flex 项、min-width 仍是 auto，而输入框
+      有约 170px 的固有最小宽度，于是文字冲出胶囊。必须把 input 也放开。
+   ② 右上角 ＋ 换成 ☰：手机上「新建」已由底部导航的 ＋ 承担，腾出来的位置给
+      「按标签筛选」——此前手机端侧边栏 display:none，标签筛选根本没有入口。
+   ============================================================================ */
+.search input { min-width: 0; }
+
+.menu-btn { display: none; }                 /* 桌面不显示（桌面用侧边栏标签区） */
+
+.drawer-mask {
+  position: fixed; inset: 0; z-index: 45;
+  background: rgba(20, 16, 26, 0.38);
+  opacity: 0; pointer-events: none; transition: opacity .18s;
+}
+.drawer-mask.open { opacity: 1; pointer-events: auto; }
+
+.drawer {
+  position: fixed; top: 0; right: 0; bottom: 0; z-index: 46;
+  width: min(82vw, 300px);
+  background: var(--sidebar-bg);
+  border-left: 1px solid var(--border);
+  box-shadow: -10px 0 28px rgba(30, 25, 45, .14);
+  transform: translateX(102%);
+  transition: transform .2s ease;
+  display: flex; flex-direction: column;
+  padding: calc(14px + env(safe-area-inset-top)) 14px calc(14px + env(safe-area-inset-bottom));
+  overflow-y: auto;
+}
+.drawer.open { transform: translateX(0); }
+.drawer-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
+.drawer-head > span { font-weight: 800; font-size: 15px; }
+.drawer-body .tag-row { display: flex; flex-wrap: wrap; gap: 9px; }
+
+@media (max-width: 680px) {
+  .menu-btn { display: grid; }
+  #newBtn { display: none; }                 /* 手机上新建交给底部导航的 ＋ */
+}
+
+/* ============================================================================
+   v29 · 手机端「连续自适应」——取代按断点硬跳的固定像素
+   ----------------------------------------------------------------------------
+   原来 ≤680 与 ≤420 两档写死 px：320px 的老手机与 430px 的大屏只是"碰巧能看"。
+   现在字号/间距/按钮尺寸全部用 clamp(最小, vw, 最大) 随屏宽平滑变化；列数由
+   app.js 的 masonryCols() 按可用宽度自动算（1..3 列），CSS 只负责均分。
+   vw 在真机上不随滚动变化（地址栏收放不影响），所以是稳定的。
+   ============================================================================ */
+@media (max-width: 680px) {
+  .board {
+    display: flex;                       /* 列数由子元素个数决定，不再写死 */
+    gap: clamp(7px, 2.4vw, 12px);
+    align-items: flex-start;
+  }
+  .board-col {
+    flex: 1 1 0; min-width: 0;
+    display: flex; flex-direction: column;
+    gap: clamp(7px, 2.4vw, 12px);
+  }
+
+  .note {
+    padding: clamp(8px, 3vw, 13px) clamp(8px, 3vw, 13px) clamp(6px, 2.3vw, 10px);
+    border-radius: clamp(11px, 3.6vw, 15px);
+  }
+  .note::before { height: clamp(3px, 1vw, 4px); }
+  .note-top { gap: clamp(3px, 1.2vw, 5px); margin-bottom: clamp(2px, 1vw, 4px); }
+  .note-due { font-size: clamp(9.5px, 2.9vw, 12px); padding: clamp(1px, .7vw, 3px) clamp(5px, 1.8vw, 8px); }
+  .note-flag { font-size: clamp(10px, 3.2vw, 13px); }
+  .note h3 { font-size: clamp(12px, 3.9vw, 15px); margin: clamp(1px, .5vw, 2px) 0 clamp(3px, 1.2vw, 5px); line-height: 1.3; }
+  .note .body { font-size: clamp(10.5px, 3.3vw, 12.5px); line-height: 1.45; margin-bottom: clamp(5px, 2vw, 8px); }
+  .note-tags { gap: clamp(3px, 1.3vw, 5px); margin-bottom: clamp(4px, 1.7vw, 7px); }
+  .note-tags .tag { font-size: clamp(9px, 2.9vw, 11px); padding: clamp(1px, .6vw, 2px) clamp(5px, 1.8vw, 7px); }
+  .note-checklist { gap: clamp(3px, 1.3vw, 5px); margin-bottom: clamp(4px, 1.7vw, 7px); }
+  .check-item { font-size: clamp(10.5px, 3.2vw, 12px); gap: clamp(4px, 1.5vw, 6px); }
+  .check-item input { width: clamp(12px, 3.6vw, 14px); height: clamp(12px, 3.6vw, 14px); margin-top: 2px; }
+  .note-foot { gap: clamp(2px, .8vw, 3px); padding-top: clamp(4px, 1.8vw, 7px); }
+  .mini-btn {
+    width: clamp(22px, 6.6vw, 28px); height: clamp(22px, 6.6vw, 28px);
+    flex: 0 0 clamp(22px, 6.6vw, 28px);
+    font-size: clamp(11px, 3.3vw, 13px);
+    border-radius: clamp(6px, 2vw, 9px);
+  }
+  .desk-btn { height: clamp(20px, 5.6vw, 24px); padding: 0 clamp(4px, 1.4vw, 7px); font-size: clamp(10px, 2.9vw, 11.5px); }
+  .main { padding: clamp(12px, 3.6vw, 18px) clamp(10px, 3.4vw, 18px) calc(96px + env(safe-area-inset-bottom)); }
+  .main-top { gap: clamp(6px, 2vw, 10px); margin-bottom: clamp(10px, 3.4vw, 16px); }
+  .main-top h1 { font-size: clamp(17px, 5vw, 20px); }
+  .main-sub { font-size: clamp(11.5px, 3.4vw, 13px); }
+  .filter-chip { font-size: clamp(11.5px, 3.4vw, 13px); padding: clamp(6px, 1.9vw, 8px) clamp(10px, 3.2vw, 14px); }
+}

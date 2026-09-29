@@ -8,6 +8,13 @@ dist_work/
 .dsh-meow/
 .agent-teams/
 
+# 桌面贴纸（S1）：v14 起它已并入主程序（exe 的 16/18 个源文件），源码必须进库；
+# 只排它自己的构建产物
+desktop-sticker/*.exe
+desktop-sticker/*.log
+desktop-sticker/sticker-state.json
+desktop-sticker/build-manifest.json
+
 # 杂项
 *.log
 .DS_Store
