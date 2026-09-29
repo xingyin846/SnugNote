@@ -4,6 +4,9 @@ data/
 dist/
 dist_work/
 
+# 发布页：页面源码在 site/ 里（要进库），但 dl/ 是从 dist/ 拷来的安装文件产物，不进库
+site/dl/
+
 # 记忆系统与协作运行态
 .dsh-meow/
 .agent-teams/
